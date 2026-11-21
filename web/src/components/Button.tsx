@@ -11,14 +11,15 @@ export type Variant = "solid" | "quiet" | "link" | "danger";
 /**
  * How tall, which is a question about what the button is standing next to.
  *
- * field is beside an input and matches it. bar is a row of controls with no field in it — and
- * a finger is still a finger, so the height comes back below a pointer that is not one.
+ * field is in a form, beside or under its inputs, and a dialog's: it matches them. bar is every
+ * other, on a page, alone or in a row of controls, and the same on a phone: grown for a finger
+ * it stood taller than the fields beside it and the text it sits in.
  */
 export type Size = "field" | "bar";
 
 const shapes: Record<Size, string> = {
   field: "min-h-10 px-3 py-1.5 text-sm",
-  bar: "min-h-8 px-2.5 py-1 text-sm pointer-coarse:min-h-10",
+  bar: "min-h-8 px-2.5 py-1 text-sm",
 };
 
 const styles: Record<Variant, string> = {

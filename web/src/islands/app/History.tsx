@@ -64,8 +64,9 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
             <SearchField
               placeholder="An address"
               aria-label="Only the bans of this address"
+              size="bar"
               className="w-full sm:w-72"
-              inputClassName="font-mono"
+              inputClassName="font-mono placeholder:font-sans"
               value={typed}
               onChange={(v) => {
                 setTyped(v);
@@ -78,6 +79,7 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
             />
             <Picker
               label="Jail"
+              size="bar"
               className="w-full sm:w-56"
               value={jail}
               options={[
@@ -148,6 +150,7 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
             </ul>
             {history.hasNextPage ? (
               <Button
+                size="bar"
                 className="self-center"
                 disabled={history.isFetchingNextPage}
                 onClick={() => history.fetchNextPage()}

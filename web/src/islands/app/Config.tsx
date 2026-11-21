@@ -265,6 +265,7 @@ function StockList() {
         <SearchField
           placeholder="Find a filter or an action"
           aria-label="Find a stock filter or action"
+          size="bar"
           className="w-full sm:w-72"
           value={filter}
           onChange={setFilter}

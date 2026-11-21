@@ -39,7 +39,7 @@ export function Bans() {
   return (
     <Frame>
       <div className="flex justify-end">
-        <Button variant="solid" onClick={() => setAdding(true)}>
+        <Button variant="solid" size="bar" onClick={() => setAdding(true)}>
           Ban an address…
         </Button>
       </div>
@@ -53,6 +53,7 @@ export function Bans() {
             <SearchField
               placeholder="Address or jail"
               aria-label="Show only bans of an address or a jail"
+              size="bar"
               className="w-full sm:w-72"
               value={filter}
               onChange={setFilter}

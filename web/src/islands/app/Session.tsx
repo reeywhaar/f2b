@@ -45,8 +45,10 @@ export function Session() {
           changing the password signs every browser out.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => out(false)}>Sign out</Button>
-          <Button variant="danger" onClick={() => out(true)}>
+          <Button size="bar" onClick={() => out(false)}>
+            Sign out
+          </Button>
+          <Button variant="danger" size="bar" onClick={() => out(true)}>
             Sign out everywhere…
           </Button>
         </div>

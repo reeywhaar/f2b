@@ -54,6 +54,7 @@ export class Boundary extends Component<
           {this.props.what ?? "This"} could not be shown.
         </p>
         <Button
+          size="bar"
           onClick={() => {
             this.setState({ failed: false });
             this.props.onReset?.();

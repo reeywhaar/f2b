@@ -3,7 +3,11 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 import { Dialog } from "@app/components/Dialog";
 import { CheckIcon, ChevronDownIcon } from "@app/components/icons/Icon";
 import { SearchField } from "@app/components/SearchField";
-import { fieldLook, fieldSizes } from "@app/components/TextField";
+import {
+  fieldLook,
+  fieldSizes,
+  type FieldSize,
+} from "@app/components/TextField";
 
 export type Option = { value: string; label: string };
 
@@ -16,6 +20,7 @@ export function Picker({
   value,
   options,
   onChange,
+  size = "field",
   className = "",
 }: {
   /** What is being chosen, for the dialog's title and for a screen reader. */
@@ -23,6 +28,7 @@ export function Picker({
   value: string;
   options: Option[];
   onChange: (value: string) => void;
+  size?: FieldSize;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -47,6 +53,8 @@ export function Picker({
     }
   };
 
+  // A button dressed as a field, so it takes a field's type size, which main.css gives inputs:
+  // 16px on a phone, where less makes iOS zoom into a focused field, and 14px past that.
   return (
     <>
       <button
@@ -54,7 +62,7 @@ export function Picker({
         aria-label={`${label}: ${current?.label ?? value}`}
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
-        className={`${fieldLook} ${fieldSizes.field} inline-flex items-center gap-2 text-left ${className}`}
+        className={`${fieldLook} ${fieldSizes[size]} inline-flex items-center gap-2 text-left text-base sm:text-sm ${className}`}
       >
         <span className="min-w-0 flex-1 truncate">
           {current?.label ?? value}
