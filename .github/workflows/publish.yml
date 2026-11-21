@@ -164,7 +164,7 @@ jobs:
           subject: "${{ github.repository }} published"
           body-type: md
           body: |
-            🚧 Published `${{ env.ENGINE }}` and `${{ env.WEB }}`, `:latest` and `:v1`
+            #️⃣ Published `${{ env.ENGINE }}` and `${{ env.WEB }}`, `:latest` and `:v1`
 
             - by ${{ github.actor }}
             - [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
