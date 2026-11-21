@@ -14,12 +14,13 @@
   --color-fill: #f0f1f3;
   --color-control: #f2f3f5;
   --color-control-hover: #e8eaed;
-  --color-brand: #4338ca;
-  --color-brand-ink: #ffffff;
+  /* Ochre. The ink on it is near-black: white on it is 2.8:1, this 6.7:1. */
+  --color-brand: #c39144;
+  --color-brand-ink: #111113;
   --color-accent: #b91c1c;
   --color-grid: #eceef1;
   --color-axis: #c9cdd3;
-  --color-good: #006300;
+  --color-good: #91b411;
   --color-warn: #b45309;
   /* Code: the editor's and the log's. */
   --color-code-bg: #fbfbfc;
@@ -35,7 +36,8 @@
 
 /*
  * A color each for the jails, in the order the jails are named, for the charts that tell them
- * apart: the appstoreanalytics palette from its second slot, so no jail wears the brand. The
+ * apart: the appstoreanalytics palette from its second slot, the first being that project's own
+ * brand. The
  * eight are checked with the dataviz validator as one list against the cards they are drawn on,
  * in both modes. Under 3:1 for some, so every chart has a legend, a readout and a table.
  *
@@ -66,12 +68,12 @@
     --color-fill: #2a2c31;
     --color-control: #2a2c31;
     --color-control-hover: #33363c;
-    --color-brand: #8b93ff;
-    --color-brand-ink: #0f1020;
+    --color-brand: #c39144;
+    --color-brand-ink: #111113;
     --color-accent: #f87171;
     --color-grid: #2a2c31;
     --color-axis: #3b3f46;
-    --color-good: #2fbf4f;
+    --color-good: #91b411;
     --color-warn: #f59e0b;
     --color-code-bg: #1b1d21;
     --color-code-comment: #8b949e;
