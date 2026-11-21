@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getLog } from "@app/api/actions";
 import { messageOf } from "@app/api/transport";
 import { Button } from "@app/components/Button";
+import { DummyLines } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
 import { SearchField } from "@app/components/SearchField";
 
@@ -18,6 +19,8 @@ type Line = { seq: number; text: string };
 export function Log() {
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState("");
+  // Whether the engine has answered at all: until it has, an empty log says nothing.
+  const [read, setRead] = useState(false);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("");
   const cursor = useRef({ after: -1, epoch: "" });
@@ -36,6 +39,7 @@ export function Log() {
           cursor.current.epoch !== "" && page.epoch !== cursor.current.epoch;
         cursor.current = { after: page.last, epoch: page.epoch };
         setError("");
+        setRead(true);
         if (page.lines.length > 0 || restarted) {
           setLines((old) => {
             const next = restarted
@@ -72,52 +76,63 @@ export function Log() {
   }, [shown]);
 
   return (
-    <Frame>
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchField
-          placeholder="Show only lines with…"
-          aria-label="Show only lines with this"
-          className="w-full sm:w-72"
-          value={filter}
-          onChange={setFilter}
-        />
-        <span className="flex-1" />
-        <span className="text-xs text-muted tabular-nums">
-          {filter
-            ? `${shown.length} of ${lines.length} lines`
-            : `${lines.length} lines`}
-        </span>
-        <Button
-          size="bar"
-          onClick={() => setPaused(!paused)}
-          aria-pressed={paused}
+    <Frame fill>
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchField
+            placeholder="Show only lines with…"
+            aria-label="Show only lines with this"
+            className="w-full sm:w-72"
+            value={filter}
+            onChange={setFilter}
+          />
+          <span className="flex-1" />
+          {read ? (
+            <span className="text-xs text-muted tabular-nums">
+              {filter
+                ? `${shown.length} of ${lines.length} lines`
+                : `${lines.length} lines`}
+            </span>
+          ) : null}
+          <Button
+            size="bar"
+            onClick={() => setPaused(!paused)}
+            aria-pressed={paused}
+          >
+            {paused ? "Follow" : "Pause"}
+          </Button>
+        </div>
+        {error ? <p className="text-sm text-accent">{error}</p> : null}
+        <div
+          ref={box}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            stuck.current =
+              el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+          }}
+          className="scroll-thin min-h-48 flex-1 overflow-auto rounded-lg border border-line bg-(--color-code-bg) p-3 font-mono text-[11px] leading-relaxed"
         >
-          {paused ? "Follow" : "Pause"}
-        </Button>
-      </div>
-      {error ? <p className="text-sm text-accent">{error}</p> : null}
-      <div
-        ref={box}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-        }}
-        className="scroll-thin h-[calc(100dvh-12rem)] min-h-80 overflow-auto rounded-lg border border-line bg-(--color-code-bg) p-3 font-mono text-[11px] leading-relaxed"
-      >
-        {shown.length === 0 ? (
-          <p className="text-muted">
-            {filter ? "No line has that." : "Nothing logged yet."}
-          </p>
-        ) : (
-          shown.map((l, i) => (
-            <div
-              key={`${l.seq}-${i}`}
-              className={`whitespace-pre-wrap break-all ${tone(l.text)}`}
-            >
-              {l.text}
-            </div>
-          ))
-        )}
+          {/* Not read yet and read empty are two things: the first is a shape where lines will
+              be, or nothing at all beside the error that says why; only the second is told. */}
+          {shown.length > 0 ? (
+            shown.map((l, i) => (
+              <div
+                key={`${l.seq}-${i}`}
+                className={`whitespace-pre-wrap break-all ${tone(l.text)}`}
+              >
+                {l.text}
+              </div>
+            ))
+          ) : !read ? (
+            error ? null : (
+              <DummyLines count={6} />
+            )
+          ) : (
+            <p className="text-muted">
+              {lines.length > 0 ? "No line has that." : "Nothing logged yet."}
+            </p>
+          )}
+        </div>
       </div>
     </Frame>
   );

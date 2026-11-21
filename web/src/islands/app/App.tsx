@@ -13,7 +13,11 @@ import { Stock } from "@app/islands/app/Stock";
 export function App() {
   const route = useRoute();
   return (
-    <div className="flex min-h-dvh flex-col">
+    // The log scrolls in a box of its own, which fills the screen and no more: a page around
+    // it that scrolled too would be two scrolls, one inside the other.
+    <div
+      className={`flex flex-col ${route.page === "log" ? "h-dvh" : "min-h-dvh"}`}
+    >
       <Header route={route} />
       <Boundary what="This page" key={route.page}>
         <Page route={route} />
