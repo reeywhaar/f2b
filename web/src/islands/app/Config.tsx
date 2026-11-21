@@ -15,6 +15,7 @@ import { TextField } from "@app/components/TextField";
 import { ago, size } from "@app/format";
 import { Link } from "@app/islands/app/Link";
 import { go, paths } from "@app/islands/app/route";
+import { Session } from "@app/islands/app/Session";
 
 const lists: {
   kind: Exclude<Kind, "settings">;
@@ -128,6 +129,7 @@ export function Config() {
         </ul>
       </Panel>
       <StockList />
+      <Session />
       <NewFile kind={adding} onClose={() => setAdding(null)} />
     </Frame>
   );
