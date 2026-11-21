@@ -1,0 +1,39 @@
+# f2b with a stand-in engine: invented jails, bans and logs, made afresh on every start, served
+# by the real web. The data volume keeps the sign-in from one run to the next. See README.md.
+#
+#   docker compose up --build
+#
+# then http://f2b.localhost:8080, password demodemo.
+name: f2b-demo
+
+services:
+  # `f2b demo`, from the web image: the engine's API over invented data, with no fail2ban and no
+  # firewall, so it runs anywhere, unprivileged.
+  engine:
+    build:
+      context: ..
+      target: web
+    image: f2b-demo:dev
+    command: ["demo"]
+    healthcheck:
+      test: ["CMD", "f2b", "healthcheck", "engine"]
+      interval: 1s
+      retries: 60
+    volumes:
+      - data:/data
+
+  web:
+    image: f2b-demo:dev
+    depends_on:
+      engine:
+        condition: service_healthy
+    environment:
+      ADMIN_PASSWORD: demodemo
+      F2B_PUBLIC_URL: http://f2b.localhost:${DEMO_PORT:-8080}
+    volumes:
+      - data:/data
+    ports:
+      - "${DEMO_PORT:-8080}:80"
+
+volumes:
+  data:

@@ -1,0 +1,361 @@
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import {
+  deleteFile,
+  getFile,
+  getStock,
+  postCheck,
+  putFile,
+} from "@app/api/actions";
+import { qk } from "@app/api/keys";
+import { ApiError, messageOf } from "@app/api/transport";
+import type { Kind } from "@app/api/types";
+import { Button } from "@app/components/Button";
+import { useConfirm } from "@app/components/Confirm";
+import { DummyRows } from "@app/components/Dummy";
+import { Frame } from "@app/components/Frame";
+import { CodeEditor } from "@app/editor/CodeEditor";
+import { ago } from "@app/format";
+import { Link } from "@app/islands/app/Link";
+import { RegexTester } from "@app/islands/app/RegexTester";
+import { go, hold, paths } from "@app/islands/app/route";
+import { templateFor } from "@app/islands/app/templates";
+
+const dirs: Record<Kind, string> = {
+  jails: "jail.d/",
+  filters: "filter.d/",
+  actions: "action.d/",
+  settings: "",
+};
+
+/** What the last thing done said, kept on screen until the next. */
+type Outcome = {
+  tone: "good" | "warn" | "bad";
+  message: string;
+  output?: string;
+  reopen?: boolean;
+} | null;
+
+/**
+ * One file, in the editor, until Save. Save is tried on fail2ban first, against everything else
+ * that is edited, and only written if fail2ban would start with it; then fail2ban reloads.
+ */
+export function FileEditor({
+  kind,
+  name,
+  fresh,
+}: {
+  kind: Kind;
+  name: string;
+  fresh: boolean;
+}) {
+  const client = useQueryClient();
+  const confirm = useConfirm();
+  const file = useQuery({
+    queryKey: qk.file(kind, name),
+    queryFn: () => getFile(kind, name),
+    enabled: !fresh,
+    // What is in the editor is the user's until they ask for the file again.
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+  });
+  const stock = useQuery({
+    queryKey: qk.stock,
+    queryFn: getStock,
+    enabled: fresh && (kind === "filters" || kind === "actions"),
+  });
+
+  // What was opened, the version it was, and what is in the editor now.
+  const [base, setBase] = useState<{ content: string; version: string } | null>(
+    null,
+  );
+  const [draft, setDraft] = useState("");
+  const [outcome, setOutcome] = useState<Outcome>(null);
+
+  useEffect(() => {
+    if (base) return;
+    if (fresh) {
+      if (stock.isPending && (kind === "filters" || kind === "actions")) return;
+      const content = templateFor(kind, name, stock.data);
+      setBase({ content: "", version: "" });
+      setDraft(content);
+    } else if (file.data) {
+      setBase({ content: file.data.content, version: file.data.file.version });
+      setDraft(file.data.content);
+    }
+  }, [base, fresh, file.data, stock.isPending, stock.data, kind, name]);
+
+  const dirty = base !== null && (fresh || draft !== base.content);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  // Leaving with changes asks first: within the island in the app's own dialog, and out of the
+  // document in the browser's.
+  useEffect(() => {
+    hold(
+      async () =>
+        !dirtyRef.current ||
+        confirm({
+          title: "Leave without saving",
+          message: `The changes to ${name} are not saved, and are lost.`,
+          confirm: "Leave",
+          danger: true,
+        }),
+    );
+    const unload = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", unload);
+    return () => {
+      hold(null);
+      window.removeEventListener("beforeunload", unload);
+    };
+  }, [confirm, name]);
+
+  const refresh = () => {
+    client.invalidateQueries({ queryKey: qk.files });
+    client.invalidateQueries({ queryKey: qk.jails });
+    client.invalidateQueries({ queryKey: qk.engine });
+  };
+
+  const save = useMutation({
+    mutationFn: () =>
+      putFile(kind, name, { content: draft, version: base?.version ?? "" }),
+    onMutate: () => setOutcome(null),
+    onSuccess: (applied) => {
+      const saved = applied.file!;
+      setBase({ content: draft, version: saved.version });
+      client.setQueryData(qk.file(kind, name), { file: saved, content: draft });
+      refresh();
+      setOutcome(
+        applied.reload.ok
+          ? {
+              tone: "good",
+              message: "Saved, and fail2ban reloaded with it.",
+              output: applied.reload.output,
+            }
+          : {
+              tone: "warn",
+              message:
+                "Saved, but fail2ban's reload failed. The file is on disk; fail2ban runs as it was until the reload succeeds.",
+              output: applied.reload.output,
+            },
+      );
+      // Saved, so leaving the address that said "new" is not leaving changes behind.
+      dirtyRef.current = false;
+      if (fresh) go(paths.file(kind, name), true);
+    },
+    onError: (err) => setOutcome(refusal(err)),
+  });
+
+  const check = useMutation({
+    mutationFn: () => postCheck({ kind, name, content: draft }),
+    onMutate: () => setOutcome(null),
+    onSuccess: (r) =>
+      setOutcome(
+        r.ok
+          ? {
+              tone: "good",
+              message: "fail2ban would start with this.",
+              output: r.output,
+            }
+          : {
+              tone: "bad",
+              message: "fail2ban would refuse this.",
+              output: r.output,
+            },
+      ),
+    onError: (err) => setOutcome(refusal(err)),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteFile(kind, name, base?.version ?? ""),
+    onSuccess: () => {
+      dirtyRef.current = false;
+      client.removeQueries({ queryKey: qk.file(kind, name) });
+      refresh();
+      go(paths.config);
+    },
+    onError: (err) => setOutcome(refusal(err)),
+  });
+
+  const reopen = async () => {
+    if (
+      dirty &&
+      !(await confirm({
+        title: "Open it again",
+        message: `What is on disk now replaces what is in the editor, and the changes made here are lost.`,
+        confirm: "Open it again",
+        danger: true,
+      }))
+    ) {
+      return;
+    }
+    const again = await file.refetch();
+    if (again.data) {
+      setBase({
+        content: again.data.content,
+        version: again.data.file.version,
+      });
+      setDraft(again.data.content);
+      setOutcome(null);
+    }
+  };
+
+  const busy = save.isPending || check.isPending || remove.isPending;
+  const loading = !fresh && file.isPending;
+
+  return (
+    <Frame>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Link href={paths.config} className="text-sm text-muted hover:text-fg">
+          Config
+        </Link>
+        <span className="text-faint">/</span>
+        <h1 className="font-mono text-base font-semibold">
+          <span className="text-muted">{dirs[kind]}</span>
+          {name}
+        </h1>
+        {fresh ? (
+          <span className="rounded bg-fill px-1.5 py-0.5 text-xs text-muted">
+            new
+          </span>
+        ) : file.data ? (
+          <span className="text-xs text-faint">
+            changed {ago(file.data.file.modified)}
+          </span>
+        ) : null}
+        <span className="flex-1" />
+        {!fresh && file.data ? (
+          <Button
+            size="bar"
+            variant="danger"
+            disabled={busy}
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: `Delete ${name}`,
+                  message:
+                    kind === "jails"
+                      ? "The file goes, and fail2ban reloads without it: its jails stop, and their bans are lifted. fail2ban's database keeps their history."
+                      : "The file goes, if fail2ban would still start without it, and fail2ban reloads.",
+                  confirm: "Delete",
+                  danger: true,
+                })
+              ) {
+                remove.mutate();
+              }
+            }}
+          >
+            Delete…
+          </Button>
+        ) : null}
+        {dirty && !fresh ? (
+          <Button
+            size="bar"
+            disabled={busy}
+            onClick={() => base && setDraft(base.content)}
+          >
+            Discard
+          </Button>
+        ) : null}
+        <Button
+          size="bar"
+          disabled={busy || loading}
+          onClick={() => check.mutate()}
+        >
+          {check.isPending ? "Checking…" : "Check"}
+        </Button>
+        <Button
+          size="bar"
+          variant="solid"
+          disabled={busy || loading || !dirty}
+          onClick={() => save.mutate()}
+        >
+          {save.isPending ? "Saving…" : "Save"}
+        </Button>
+      </div>
+
+      {file.isError ? (
+        <p className="text-sm text-accent">{messageOf(file.error)}</p>
+      ) : base === null ? (
+        <DummyRows count={8} />
+      ) : (
+        <div className="flex flex-col gap-3">
+          <CodeEditor
+            label={`${name}, editable`}
+            value={draft}
+            onChange={setDraft}
+            onSave={() => {
+              if (dirty && !busy) save.mutate();
+            }}
+          />
+          <p className="text-xs text-faint">
+            Cmd-S or Ctrl-S saves; Cmd-F or Ctrl-F finds. Tab indents, which
+            carries a value on to the next line. Escape, then Tab, leaves the
+            editor.
+          </p>
+          <OutcomeView outcome={outcome} onReopen={reopen} />
+        </div>
+      )}
+
+      {kind === "filters" && base !== null ? (
+        <RegexTester file={name} content={draft} />
+      ) : null}
+    </Frame>
+  );
+}
+
+function refusal(err: unknown): Outcome {
+  if (err instanceof ApiError && err.code === "config_rejected") {
+    return { tone: "bad", message: err.message, output: err.output };
+  }
+  if (err instanceof ApiError && err.code === "conflict") {
+    return { tone: "bad", message: err.message, reopen: true };
+  }
+  return { tone: "bad", message: messageOf(err) };
+}
+
+const tones = {
+  good: "border-good/40 text-good",
+  warn: "border-warn/50 text-warn",
+  bad: "border-accent/50 text-accent",
+};
+
+function OutcomeView({
+  outcome,
+  onReopen,
+}: {
+  outcome: Outcome;
+  onReopen: () => void;
+}) {
+  if (!outcome) return null;
+  const long = (outcome.output ?? "").includes("\n");
+  return (
+    <div
+      role="status"
+      className={`flex flex-col gap-2 rounded-lg border bg-bg px-4 py-3 ${tones[outcome.tone]}`}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="flex-1 text-sm font-medium">{outcome.message}</p>
+        {outcome.reopen ? (
+          <Button size="bar" onClick={onReopen}>
+            Open it again…
+          </Button>
+        ) : null}
+      </div>
+      {outcome.output && outcome.output !== "OK" ? (
+        // A refusal's words are the point, and are shown; a success's are there if wanted.
+        <details open={outcome.tone !== "good" || !long}>
+          <summary className="cursor-pointer text-xs text-muted select-none">
+            What fail2ban said
+          </summary>
+          <pre className="scroll-thin mt-1 max-h-80 overflow-auto rounded-md bg-(--color-code-bg) p-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-fg">
+            {outcome.output}
+          </pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}

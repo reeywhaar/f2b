@@ -1,0 +1,72 @@
+import type { Kind, Stock } from "@app/api/types";
+
+const bare = (name: string) => name.replace(/\.(local|conf)$/, "");
+
+/**
+ * What a new file starts with: enough to show the shape, with nothing in it that fail2ban
+ * would take as meant. A filter or an action named after a stock one starts as an override of
+ * it, which changes only what it sets.
+ */
+export function templateFor(kind: Kind, name: string, stock?: Stock): string {
+  const b = bare(name);
+  switch (kind) {
+    case "jails":
+      return `[${b}]
+enabled   = true
+filter    = ${b}
+logpath   = /remotelogs/docker/${b}.log
+maxretry  = 5
+findtime  = 10m
+bantime   = 1d
+# A published container's traffic passes DOCKER-USER, not INPUT.
+banaction = iptables-allports[chain=DOCKER-USER]
+`;
+    case "filters":
+      if (stock?.filters.includes(`${b}.conf`)) {
+        return `# Overrides filter.d/${b}.conf: only what is set here changes.
+[Definition]
+`;
+      }
+      return `[Definition]
+# One regular expression a line. <ADDR> is the address; <HOST> is an address or a host name.
+failregex = 
+ignoreregex =
+`;
+    case "actions":
+      if (stock?.actions.includes(`${b}.conf`)) {
+        return `# Overrides action.d/${b}.conf: only what is set here changes.
+[Definition]
+`;
+      }
+      return `[Definition]
+actionstart =
+actionstop =
+actioncheck =
+# <ip> is the address being banned, <name> the jail.
+actionban =
+actionunban =
+`;
+    case "settings":
+      if (name === "fail2ban.local") {
+        return `[DEFAULT]
+# CRITICAL, ERROR, WARNING, NOTICE, INFO or DEBUG.
+loglevel = INFO
+# How long fail2ban's database keeps bans, which is how far back the history goes.
+dbpurgeage = 90d
+`;
+      }
+      if (name === "jail.local") {
+        return `[DEFAULT]
+# Never banned: this host, and add your own.
+ignoreip = 127.0.0.1/8 ::1
+bantime  = 1d
+findtime = 10m
+maxretry = 5
+`;
+      }
+      return `[DEFAULT]
+# Where the stock jails look for logs, for one that reads somewhere else here.
+# sshd_log = /var/log/auth.log
+`;
+  }
+}

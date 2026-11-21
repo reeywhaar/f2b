@@ -1,0 +1,627 @@
+package engine
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/netip"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"f2b/internal/app"
+	"f2b/internal/f2bsock"
+	"f2b/internal/history"
+	"f2b/internal/reply"
+)
+
+// Server is the engine's API, on a socket only the web reaches. It trusts whoever connects:
+// reaching the socket takes the data directory, which is already everything.
+type Server struct {
+	Files    *Files
+	Composer *Composer
+	Daemon   Daemon
+	Tools    Tools
+	History  *history.DB
+	Lines    *Lines
+	Log      *slog.Logger
+	// Live is the configuration fail2ban runs with; Scratch is where a change is tried first.
+	Live    string
+	Scratch string
+	Now     func() time.Time
+
+	// mu holds one change to the configuration at a time, from the first check to the reload.
+	mu  sync.Mutex
+	mux *http.ServeMux
+}
+
+// Handler wires the routes.
+func (s *Server) Handler() http.Handler {
+	if s.Now == nil {
+		s.Now = time.Now
+	}
+	m := http.NewServeMux()
+	m.HandleFunc("GET /healthz", s.healthz)
+	m.HandleFunc("GET /api/engine", s.engine)
+	m.HandleFunc("POST /api/engine/restart", s.restart)
+	m.HandleFunc("GET /api/jails", s.jails)
+	m.HandleFunc("GET /api/bans", s.bans)
+	m.HandleFunc("POST /api/bans", s.ban)
+	m.HandleFunc("DELETE /api/bans/{ip}", s.unban)
+	m.HandleFunc("GET /api/history", s.history)
+	m.HandleFunc("GET /api/stats", s.stats)
+	m.HandleFunc("GET /api/files", s.listFiles)
+	m.HandleFunc("GET /api/files/{kind}/{name}", s.getFile)
+	m.HandleFunc("PUT /api/files/{kind}/{name}", s.putFile)
+	m.HandleFunc("DELETE /api/files/{kind}/{name}", s.deleteFile)
+	m.HandleFunc("POST /api/check", s.check)
+	m.HandleFunc("GET /api/stock", s.stockList)
+	m.HandleFunc("GET /api/stock/{path...}", s.stockFile)
+	m.HandleFunc("POST /api/regex", s.regex)
+	m.HandleFunc("GET /api/log", s.log)
+	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		reply.Refuse(w, http.StatusNotFound, reply.CodeNotFound, "There is no such endpoint. docs/api.md lists them all.")
+	})
+	s.mux = m
+	return m
+}
+
+// PrepareLive composes the configuration fail2ban runs with from what is on disk now. The
+// supervisor calls it before every start.
+func (s *Server) PrepareLive() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Composer.Compose(s.Live, nil)
+}
+
+func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
+	reply.JSON(w, http.StatusOK, map[string]any{"ok": true, "fail2ban": s.Daemon.State().State})
+}
+
+func (s *Server) engine(w http.ResponseWriter, r *http.Request) {
+	reply.JSON(w, http.StatusOK, map[string]any{"version": app.Version, "fail2ban": s.Daemon.State()})
+}
+
+func (s *Server) restart(w http.ResponseWriter, r *http.Request) {
+	s.Log.Info("fail2ban restart asked for")
+	s.Lines.Note("NOTICE", "restarting fail2ban, as asked")
+	s.Daemon.Restart()
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) jails(w http.ResponseWriter, r *http.Request) {
+	jails, err := s.Daemon.Jails(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// The file a jail is defined in: the first that names it, among jail files and then settings.
+	files, _ := s.Files.List()
+	where := map[string]*FileRef{}
+	for _, k := range []Kind{Jails, Settings} {
+		for _, f := range files {
+			if f.Kind != k {
+				continue
+			}
+			for _, sec := range f.Sections {
+				if where[sec] == nil {
+					where[sec] = &FileRef{Kind: f.Kind, Name: f.Name}
+				}
+			}
+		}
+	}
+	for i := range jails {
+		j := &jails[i]
+		j.File, j.Filter = where[j.Name], j.Name
+		if j.File != nil {
+			if _, content, err := s.Files.Read(j.File.Kind, j.File.Name); err == nil {
+				j.Filter = FilterOf(content, j.Name)
+			}
+		}
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"jails": jails})
+}
+
+// CurrentBan is a ban in force: fail2ban's word that it is, with the database's of when it
+// began and how long it lasts, where the database has them.
+type CurrentBan struct {
+	history.Ban
+	// Until is when it ends, in Unix seconds, or 0 for never or not known.
+	Until int64 `json:"until"`
+}
+
+func (s *Server) bans(w http.ResponseWriter, r *http.Request) {
+	banned, err := s.Daemon.Banned(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	latest, err := s.History.Latest(r.Context())
+	if err != nil {
+		s.Log.Warn("the bans in force could not be dated", "error", err.Error())
+		latest = map[history.Key]history.Ban{}
+	}
+	out := []CurrentBan{}
+	for jail, ips := range banned {
+		for _, ip := range ips {
+			b := CurrentBan{Ban: history.Ban{Jail: jail, IP: ip, Matches: []string{}}}
+			if known, ok := latest[history.Key{Jail: jail, IP: ip}]; ok {
+				b.Ban = known
+				if known.Duration > 0 {
+					b.Until = known.At + known.Duration
+				}
+			}
+			out = append(out, b)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].At != out[j].At {
+			return out[i].At > out[j].At
+		}
+		return out[i].IP < out[j].IP
+	})
+	reply.JSON(w, http.StatusOK, map[string]any{"bans": out})
+}
+
+func parseAddress(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if a, err := netip.ParseAddr(raw); err == nil {
+		return a.Unmap().String(), nil
+	}
+	if p, err := netip.ParsePrefix(raw); err == nil {
+		return p.Masked().String(), nil
+	}
+	return "", invalid("%q is not an address or a range of them", raw)
+}
+
+func (s *Server) ban(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Jail string `json:"jail"`
+		IP   string `json:"ip"`
+	}
+	if !reply.Decode(w, r, &req) {
+		return
+	}
+	ip, err := parseAddress(req.IP)
+	if err == nil && req.Jail == "" {
+		err = invalid("a ban is in a jail; name one")
+	}
+	if err == nil {
+		err = s.Daemon.Ban(r.Context(), req.Jail, ip)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Log.Info("banned by hand", "jail", req.Jail, "ip", ip)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) unban(w http.ResponseWriter, r *http.Request) {
+	ip, err := parseAddress(r.PathValue("ip"))
+	jail := r.URL.Query().Get("jail")
+	if err == nil {
+		err = s.Daemon.Unban(r.Context(), jail, ip)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Log.Info("unbanned by hand", "jail", jail, "ip", ip)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) history(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	before, _ := strconv.ParseInt(q.Get("before"), 10, 64)
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	bans, next, err := s.History.List(r.Context(), history.Query{
+		Jail: q.Get("jail"), IP: strings.TrimSpace(q.Get("ip")), Before: before, Limit: limit,
+	})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"bans": bans, "next": next})
+}
+
+func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	if days < 1 || days > 366 {
+		days = 30
+	}
+	st, err := s.History.Stats(r.Context(), days, s.Now())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, st)
+}
+
+func (s *Server) listFiles(w http.ResponseWriter, r *http.Request) {
+	files, err := s.Files.List()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+func (s *Server) target(r *http.Request) (Kind, string, error) {
+	k, err := ParseKind(r.PathValue("kind"))
+	if err != nil {
+		return "", "", err
+	}
+	name := r.PathValue("name")
+	return k, name, CheckName(k, name)
+}
+
+func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
+	k, name, err := s.target(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	f, content, err := s.Files.Read(k, name)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"file": f, "content": content})
+}
+
+// Applied is what a save or a delete did: the file as it now is, and what the reload said.
+type Applied struct {
+	File   *File  `json:"file"`
+	Reload Result `json:"reload"`
+}
+
+func (s *Server) putFile(w http.ResponseWriter, r *http.Request) {
+	k, name, err := s.target(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var req struct {
+		Content string `json:"content"`
+		// Version is the one the change was made against, or "" for a new file.
+		Version string `json:"version"`
+	}
+	if !reply.Decode(w, r, &req) {
+		return
+	}
+	if len(req.Content) > ContentMax {
+		s.fail(w, r, invalid("that file is over %d KB", ContentMax>>10))
+		return
+	}
+	out, err := s.Apply(r.Context(), Change{Kind: k, Name: name, Content: &req.Content}, req.Version)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, out)
+}
+
+func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request) {
+	k, name, err := s.target(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out, err := s.Apply(r.Context(), Change{Kind: k, Name: name}, r.URL.Query().Get("version"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, out)
+}
+
+// rejected is fail2ban refusing a configuration, in its own words.
+type rejected struct{ output string }
+
+func (e *rejected) Error() string { return "fail2ban refused this configuration" }
+
+// Apply checks a change against everything else, and only then writes it and reloads fail2ban.
+// A refused change leaves the disk as it was.
+func (s *Server) Apply(ctx context.Context, c Change, version string) (Applied, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	current, err := s.Files.Current(c.Kind, c.Name)
+	if err != nil {
+		return Applied{}, err
+	}
+	switch {
+	case c.Content == nil && current == "":
+		return Applied{}, fmt.Errorf("%w: there is no %s %s", ErrNotFound, singular(c.Kind), c.Name)
+	case version == "" && current != "":
+		return Applied{}, fmt.Errorf("%w: there is already a %s %s", ErrConflict, singular(c.Kind), c.Name)
+	case version != current:
+		return Applied{}, fmt.Errorf("%w: that file changed since it was opened; open %s again to see how", ErrConflict, c.Name)
+	}
+
+	if err := s.Composer.Compose(s.Scratch, &c); err != nil {
+		return Applied{}, err
+	}
+	defer os.RemoveAll(s.Scratch)
+	if res := s.Tools.Check(ctx, s.Scratch); !res.OK {
+		return Applied{}, &rejected{output: res.Output}
+	}
+
+	var out Applied
+	if c.Content == nil {
+		if err := s.Files.Delete(c.Kind, c.Name); err != nil {
+			return Applied{}, err
+		}
+		s.Log.Info("file deleted", "kind", c.Kind, "name", c.Name)
+	} else {
+		if err := s.Files.Write(c.Kind, c.Name, *c.Content); err != nil {
+			return Applied{}, err
+		}
+		f, _, err := s.Files.Read(c.Kind, c.Name)
+		if err != nil {
+			return Applied{}, err
+		}
+		out.File = &f
+		s.Log.Info("file saved", "kind", c.Kind, "name", c.Name, "version", f.Version)
+	}
+
+	if err := s.Composer.Compose(s.Live, nil); err != nil {
+		return out, err
+	}
+	if s.Daemon.State().State != Running {
+		s.Lines.Note("NOTICE", "starting fail2ban with the configuration just saved")
+		s.Daemon.Restart()
+		out.Reload = Result{OK: true, Output: "fail2ban was not running, so it is being started with this configuration. The log says how that goes."}
+		return out, nil
+	}
+	out.Reload = s.Tools.Reload(ctx, s.Live)
+	if out.Reload.OK {
+		s.Lines.Note("NOTICE", "configuration reloaded after a change to "+c.Name)
+	} else {
+		s.Lines.Note("ERROR", "the reload after a change to "+c.Name+" failed")
+		s.Log.Warn("reload failed", "name", c.Name)
+	}
+	return out, nil
+}
+
+func (s *Server) check(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Kind    string  `json:"kind"`
+		Name    string  `json:"name"`
+		Content *string `json:"content"`
+	}
+	if !reply.Decode(w, r, &req) {
+		return
+	}
+	k, err := ParseKind(req.Kind)
+	if err == nil {
+		err = CheckName(k, req.Name)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	dir, err := os.MkdirTemp(filepath.Dir(s.Scratch), "check-")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	if err := s.Composer.Compose(dir, &Change{Kind: k, Name: req.Name, Content: req.Content}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, s.Tools.Check(r.Context(), dir))
+}
+
+func (s *Server) stockList(w http.ResponseWriter, r *http.Request) {
+	list, err := s.Composer.StockList()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, list)
+}
+
+func (s *Server) stockFile(w http.ResponseWriter, r *http.Request) {
+	p := r.PathValue("path")
+	content, err := s.Composer.StockFile(p)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"path": p, "content": content})
+}
+
+// Regex limits: how many lines from the end of a log are tried, by default and at most.
+const (
+	regexLines    = 2000
+	regexLinesMax = 20000
+)
+
+var filterArg = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.@-]*(\[[^\]\r\n]*\])?$`)
+
+// RegexSummary is fail2ban-regex's count of the lines it read.
+type RegexSummary struct {
+	Lines   int64 `json:"lines"`
+	Ignored int64 `json:"ignored"`
+	Matched int64 `json:"matched"`
+	Missed  int64 `json:"missed"`
+}
+
+var summaryLine = regexp.MustCompile(`Lines: (\d+) lines, (\d+) ignored, (\d+) matched, (\d+) missed`)
+
+func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		// Filter is a filter's name, as a jail names it: "sshd", or "sshd[mode=aggressive]".
+		Filter string `json:"filter"`
+		// Content is the filter file as it is in the editor, unsaved, when it is one.
+		File    string  `json:"file"`
+		Content *string `json:"content"`
+		// Log is a file to read the end of, or Text the lines themselves.
+		Log   string `json:"log"`
+		Text  string `json:"text"`
+		Lines int    `json:"lines"`
+	}
+	if !reply.Decode(w, r, &req) {
+		return
+	}
+	if !filterArg.MatchString(req.Filter) {
+		s.fail(w, r, invalid("%q is not a filter's name, which is letters, digits, dots, dashes and underscores, and options in brackets", req.Filter))
+		return
+	}
+	var change *Change
+	if req.Content != nil {
+		if err := CheckName(Filters, req.File); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		change = &Change{Kind: Filters, Name: req.File, Content: req.Content}
+	}
+	lines := req.Lines
+	if lines <= 0 {
+		lines = regexLines
+	}
+	lines = min(lines, regexLinesMax)
+
+	dir, err := os.MkdirTemp(filepath.Dir(s.Scratch), "regex-")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	if err := s.Composer.Compose(filepath.Join(dir, "etc"), change); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	sample := filepath.Join(dir, "sample.log")
+	switch {
+	case req.Log != "" && req.Text != "":
+		err = invalid("a log file or lines, not both")
+	case req.Log != "":
+		err = copyTail(req.Log, sample, lines)
+	case req.Text != "":
+		err = os.WriteFile(sample, []byte(req.Text), 0o644)
+	default:
+		err = invalid("name a log file, or paste lines to try")
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	res := s.Tools.Regex(r.Context(), filepath.Join(dir, "etc"), sample, req.Filter)
+	out := map[string]any{"ok": res.OK, "output": res.Output, "summary": nil}
+	if m := summaryLine.FindStringSubmatch(res.Output); m != nil {
+		n := func(i int) int64 { v, _ := strconv.ParseInt(m[i], 10, 64); return v }
+		out["summary"] = RegexSummary{Lines: n(1), Ignored: n(2), Matched: n(3), Missed: n(4)}
+	}
+	reply.JSON(w, http.StatusOK, out)
+}
+
+// copyTail copies the last n lines of a log, so a tester run over a log of gigabytes reads what
+// it was asked to.
+func copyTail(from, to string, n int) error {
+	if !filepath.IsAbs(from) {
+		return invalid("%q is not an absolute path", from)
+	}
+	info, err := os.Stat(from)
+	if err != nil {
+		return invalid("%s cannot be read here: %v", from, errors.Unwrap(err))
+	}
+	if !info.Mode().IsRegular() {
+		return invalid("%s is not a file", from)
+	}
+	f, err := os.Open(from)
+	if err != nil {
+		return invalid("%s cannot be read here: %v", from, errors.Unwrap(err))
+	}
+	defer f.Close()
+	// Enough for n lines of a busy access log; a log of longer lines yields fewer.
+	window := int64(n) * 1024
+	off := max(info.Size()-window, 0)
+	if _, err := f.Seek(off, io.SeekStart); err != nil {
+		return err
+	}
+	b, err := io.ReadAll(io.LimitReader(f, window))
+	if err != nil {
+		return err
+	}
+	// Started mid-line: the first is a piece of one.
+	if off > 0 {
+		if i := bytes.IndexByte(b, '\n'); i >= 0 {
+			b = b[i+1:]
+		}
+	}
+	all := bytes.Split(bytes.TrimRight(b, "\n"), []byte("\n"))
+	if len(all) > n {
+		all = all[len(all)-n:]
+	}
+	return os.WriteFile(to, append(bytes.Join(all, []byte("\n")), '\n'), 0o644)
+}
+
+func (s *Server) log(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	after := int64(-1)
+	if v := q.Get("after"); v != "" {
+		after, _ = strconv.ParseInt(v, 10, 64)
+	}
+	// A cursor from another run of the engine counts from the start of this one.
+	if q.Get("epoch") != "" && q.Get("epoch") != s.Lines.Epoch() {
+		after = -1
+	}
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 || limit > ringSize {
+		limit = 1000
+	}
+	lines, epoch, last := s.Lines.Since(after, limit)
+	reply.JSON(w, http.StatusOK, map[string]any{"epoch": epoch, "lines": lines, "last": last})
+}
+
+// fail maps an error onto a status and a code, in the one place that does.
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
+	var refused *f2bsock.Error
+	var rej *rejected
+	switch {
+	case errors.As(err, &rej):
+		reply.JSON(w, http.StatusUnprocessableEntity, reply.Refusal{
+			Code: reply.CodeRejected, Message: "fail2ban refused this configuration, and nothing was saved.", Output: rej.output,
+		})
+	case errors.Is(err, ErrInvalid):
+		reply.Refuse(w, http.StatusBadRequest, reply.CodeInvalid, sentence(err, ErrInvalid))
+	case errors.Is(err, ErrNotFound):
+		reply.Refuse(w, http.StatusNotFound, reply.CodeNotFound, sentence(err, ErrNotFound))
+	case errors.Is(err, ErrConflict):
+		reply.Refuse(w, http.StatusConflict, reply.CodeConflict, sentence(err, ErrConflict))
+	case errors.Is(err, f2bsock.ErrUnreachable):
+		reply.Refuse(w, http.StatusServiceUnavailable, reply.CodeFail2ban, "fail2ban is not answering: it is starting, or it stopped. The log says which.")
+	case errors.As(err, &refused):
+		reply.Refuse(w, http.StatusUnprocessableEntity, reply.CodeFail2ban, capitalize(refused.Message)+".")
+	case errors.Is(err, context.Canceled):
+	default:
+		s.Log.Error("request failed with an error nothing here explains", "method", r.Method, "path", r.URL.Path, "error", err.Error())
+		reply.Refuse(w, http.StatusInternalServerError, reply.CodeInternal, "Something went wrong in the engine. Its log says what.")
+	}
+}
+
+// sentence is the error's text without its kind, written for whoever reads it.
+func sentence(err, kind error) string {
+	msg := strings.TrimPrefix(err.Error(), kind.Error()+": ")
+	return capitalize(msg) + "."
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}

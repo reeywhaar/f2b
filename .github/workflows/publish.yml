@@ -1,0 +1,186 @@
+name: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer commit on main should win the race for `latest` rather than queue behind an older one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ENGINE: ghcr.io/reeywhaar/f2b-engine
+  WEB: ghcr.io/reeywhaar/f2b-web
+
+jobs:
+  # Publishing `latest` on every push is safe only because a red build never gets past this.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache: true
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:"; echo "$unformatted"; exit 1
+          fi
+
+      - run: go vet ./...
+
+      # With no frontend build present: the bundle is read at startup, so a missing one is the
+      # placeholder rather than a compile error.
+      - run: go test ./...
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: current
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+        working-directory: web
+      - run: npm run format:check
+        working-directory: web
+      - run: npm run lint
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push the engine
+        id: engine
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: engine
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.ENGINE }}:latest
+            ${{ env.ENGINE }}:v1
+          build-args: VERSION=${{ github.sha }}
+          provenance: false
+
+      - name: Build and push the web
+        id: web
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: web
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.WEB }}:latest
+            ${{ env.WEB }}:v1
+          build-args: VERSION=${{ github.sha }}
+          provenance: false
+
+      # By digest: exactly what this run pushed, through a real fail2ban and a real firewall.
+      - name: Smoke-test the engine
+        env:
+          IMAGE: ${{ env.ENGINE }}@${{ steps.engine.outputs.digest }}
+        run: |
+          docker pull "$IMAGE"
+          .github/smoke/smoke.sh
+
+      # The web in front of the demo's stand-in engine, which it carries: signed out it is sent
+      # to the sign-in, signed in it reaches the engine.
+      - name: Smoke-test the web
+        env:
+          IMAGE: ${{ env.WEB }}@${{ steps.web.outputs.digest }}
+        run: |
+          set -eu
+          docker pull "$IMAGE"
+          docker volume create smoke >/dev/null
+          docker run -d --name engine -v smoke:/data "$IMAGE" demo
+          docker run -d --name web -p 8080:80 -v smoke:/data \
+            -e ADMIN_PASSWORD="a smoke-test password" -e F2B_PUBLIC_URL=http://localhost:8080 "$IMAGE"
+          trap 'docker logs engine; docker logs web; docker rm -f engine web >/dev/null' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8080/healthz | grep -q '"ok":true'
+          curl -fsS http://localhost:8080/login | grep -q 'id="root"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/jails)" = 401
+          curl -fsS -c jar -H 'Content-Type: application/json' \
+            -d '{"password":"a smoke-test password"}' http://localhost:8080/api/auth/login
+          curl -fsS -b jar http://localhost:8080/ | grep -q 'id="root"'
+          # The stand-in engine fills its history before it answers, a second or so.
+          for i in $(seq 1 20); do
+            if curl -fsS -b jar http://localhost:8080/api/jails 2>/dev/null | grep -q '"name":"sshd"'; then break; fi
+            sleep 0.5
+          done
+          curl -fsS -b jar http://localhost:8080/api/jails | grep -q '"name":"sshd"'
+
+  # A job of its own rather than steps on `publish`, because a failing `test` *skips*
+  # `publish` rather than failing it, and a step in a job that never starts cannot report
+  # that it never started. This one runs either way and reads the results off `needs`.
+  notify:
+    needs: [test, publish]
+    # Not always(): cancel-in-progress means a newer push kills the run in flight, and being
+    # told that a commit you just superseded was cancelled is noise.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    # The secrets context is not available to `if`, so the presence check goes through env.
+    env:
+      NOTIFIO_HOST: ${{ secrets.NOTIFIO_HOST }}
+      NOTIFIO_TOKEN: ${{ secrets.NOTIFIO_TOKEN }}
+      CONFIGURED: ${{ secrets.NOTIFIO_HOST != '' && secrets.NOTIFIO_TOKEN != '' }}
+
+    steps:
+      - name: Notify on success
+        if: ${{ env.CONFIGURED == 'true' && needs.publish.result == 'success' }}
+        uses: reeywhaar/notifio/ghactions/notify@main
+        with:
+          host: ${{ env.NOTIFIO_HOST }}
+          token: ${{ env.NOTIFIO_TOKEN }}
+          subject: "${{ github.repository }} published"
+          body-type: md
+          body: |
+            🚧 Published `${{ env.ENGINE }}` and `${{ env.WEB }}`, `:latest` and `:v1`
+
+            - by ${{ github.actor }}
+            - [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+      - name: Notify on failure
+        if: ${{ env.CONFIGURED == 'true' && needs.publish.result != 'success' }}
+        uses: reeywhaar/notifio/ghactions/notify@main
+        with:
+          host: ${{ env.NOTIFIO_HOST }}
+          token: ${{ env.NOTIFIO_TOKEN }}
+          # Which half broke is the first thing worth knowing: a failing test means the
+          # commit is bad, a failing publish means the commit is fine and the build is not.
+          subject: "${{ github.repository }} ${{ needs.test.result != 'success' && 'tests failed' || 'publish failed' }}"
+          body-type: md
+          body: |
+            ❌ ${{ needs.test.result != 'success' && 'Tests failed' || 'Publish failed' }}, by ${{ github.actor }}
+
+            - [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - [view the run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})

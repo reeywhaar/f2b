@@ -1,0 +1,249 @@
+@import "tailwindcss";
+
+/*
+ * Semantic tokens, not colors. Components name what a color is for; this is the only file
+ * that says what those are. Light is the base; dark is an override of the same names.
+ */
+@theme {
+  --color-bg: #ffffff;
+  --color-page: #fafafa;
+  --color-fg: #1f2329;
+  --color-muted: #5f6672;
+  --color-faint: #80868f;
+  --color-line: #e3e5e8;
+  --color-fill: #f0f1f3;
+  --color-control: #f2f3f5;
+  --color-control-hover: #e8eaed;
+  --color-brand: #4338ca;
+  --color-brand-ink: #ffffff;
+  --color-accent: #b91c1c;
+  --color-grid: #eceef1;
+  --color-axis: #c9cdd3;
+  --color-good: #006300;
+  --color-warn: #b45309;
+  /* Code: the editor's and the log's. */
+  --color-code-bg: #fbfbfc;
+  --color-code-comment: #6a737d;
+  --color-code-section: #6f42c1;
+  --color-code-key: #005cc5;
+  --color-code-value: #24292e;
+  --color-code-var: #b45309;
+  --color-code-tag: #b31d28;
+  --color-code-gutter: #9aa0a8;
+  --color-code-selection: #c8d7ff;
+}
+
+/*
+ * A color each for the jails, in the order the jails are named, for the charts that tell them
+ * apart: the appstoreanalytics palette from its second slot, so no jail wears the brand. The
+ * eight are checked with the dataviz validator as one list against the cards they are drawn on,
+ * in both modes. Under 3:1 for some, so every chart has a legend, a readout and a table.
+ *
+ * Outside @theme: Tailwind emits a theme variable only where a class names it, and these are
+ * named by number, from code.
+ */
+:root {
+  --color-jail-1: #c83d22;
+  --color-jail-2: #2ec6c1;
+  --color-jail-3: #ab46a0;
+  --color-jail-4: #fc829c;
+  --color-jail-5: #8d58b7;
+  --color-jail-6: #3ac0e0;
+  --color-jail-7: #ad5d00;
+  --color-jail-8: #65c67d;
+}
+
+/* A plain override of the same variables rather than a second @theme: @theme is hoisted to the
+   top level whatever it is nested in. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #202226;
+    --color-page: #17181b;
+    --color-fg: #e7e9ee;
+    --color-muted: #a2a8b4;
+    --color-faint: #7d8490;
+    --color-line: #31343a;
+    --color-fill: #2a2c31;
+    --color-control: #2a2c31;
+    --color-control-hover: #33363c;
+    --color-brand: #8b93ff;
+    --color-brand-ink: #0f1020;
+    --color-accent: #f87171;
+    --color-grid: #2a2c31;
+    --color-axis: #3b3f46;
+    --color-good: #2fbf4f;
+    --color-warn: #f59e0b;
+    --color-code-bg: #1b1d21;
+    --color-code-comment: #8b949e;
+    --color-code-section: #d2a8ff;
+    --color-code-key: #79c0ff;
+    --color-code-value: #e6edf3;
+    --color-code-var: #ffa657;
+    --color-code-tag: #ff7b72;
+    --color-code-gutter: #6e7681;
+    --color-code-selection: #264f78;
+    --color-jail-1: #b32707;
+    --color-jail-2: #01a9a6;
+    --color-jail-3: #97338d;
+    --color-jail-4: #de6782;
+    --color-jail-5: #7b46a4;
+    --color-jail-6: #0ba4c4;
+    --color-jail-7: #944f04;
+    --color-jail-8: #49ab64;
+  }
+}
+
+/* Everything that is not a field takes a ring: focus-visible, so a click does not leave one. */
+:where(a, button, summary, [role="button"]):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* Without this a light page renders a dark-mode select, and the first paint flashes. */
+:root {
+  color-scheme: light dark;
+  accent-color: var(--color-brand);
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-fg);
+}
+
+/* Under 16px iOS Safari zooms the page on focus. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 40rem) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
+}
+
+/* Something on its way: a band of lighter grey travelling across a darker one, which reads as
+   waiting rather than as broken. */
+@keyframes dummy {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+.dummy {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-fill) 25%,
+    var(--color-line) 37%,
+    var(--color-fill) 63%
+  );
+  background-size: 400% 100%;
+  animation: dummy 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dummy {
+    animation: none;
+    background-image: none;
+    background-color: var(--color-fill);
+  }
+}
+
+/* Labels are small caps. */
+@utility caps {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.04em;
+}
+
+@utility scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+/*
+ * prism-code-editor, themed from the tokens above, so it is light or dark with the page rather
+ * than with a stylesheet of its own.
+ */
+.f2b-editor .prism-code-editor {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  min-height: 16rem;
+  color: var(--color-code-value);
+  --pce-bg: var(--color-code-bg);
+  --pce-cursor: var(--color-fg);
+  --pce-line-number: var(--color-code-gutter);
+  --pce-selection: var(--color-code-selection);
+  --pce-selection-match: color-mix(
+    in srgb,
+    var(--color-brand) 18%,
+    transparent
+  );
+  --pce-bg-highlight: color-mix(in srgb, var(--color-fill) 60%, transparent);
+  --pce-search-match: color-mix(in srgb, var(--color-warn) 30%, transparent);
+  --pce-widget-bg: var(--color-bg);
+  --pce-widget-border: var(--color-line);
+  --pce-widget-color: var(--color-muted);
+  --pce-widget-color-active: var(--color-fg);
+  --pce-widget-color-options: var(--color-muted);
+  --pce-widget-bg-input: var(--color-control);
+  --pce-widget-bg-hover: var(--color-control-hover);
+  --pce-widget-bg-active: color-mix(
+    in srgb,
+    var(--color-brand) 25%,
+    transparent
+  );
+  --pce-widget-focus: var(--color-brand);
+  --pce-widget-bg-error: color-mix(
+    in srgb,
+    var(--color-accent) 15%,
+    transparent
+  );
+  --pce-widget-error: var(--color-accent);
+  --pce-scrollbar: 220, 6%, 55%;
+}
+
+/* The textarea's own 14px and 16px rules above are for fields, not this. */
+.f2b-editor textarea {
+  font-size: inherit;
+}
+
+.f2b-editor .active-line {
+  --pce-line-number: var(--color-fg);
+}
+
+.f2b-editor .token.comment {
+  color: var(--color-code-comment);
+  font-style: italic;
+}
+.f2b-editor .token.section,
+.f2b-editor .token.selector {
+  color: var(--color-code-section);
+  font-weight: 600;
+}
+.f2b-editor .token.attr-name {
+  color: var(--color-code-key);
+}
+.f2b-editor .token.attr-value {
+  color: var(--color-code-value);
+}
+.f2b-editor .token.variable {
+  color: var(--color-code-var);
+}
+.f2b-editor .token.keyword {
+  color: var(--color-code-tag);
+  font-weight: 600;
+}
+.f2b-editor .token.punctuation {
+  color: var(--color-code-comment);
+}
+.f2b-editor .active-bracket {
+  box-shadow: inset 0 0 0 1px var(--color-axis);
+}
