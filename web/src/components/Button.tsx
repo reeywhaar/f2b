@@ -9,18 +9,10 @@ import type { ComponentProps } from "react";
 export type Variant = "solid" | "quiet" | "link" | "danger";
 
 /**
- * How tall, which is a question about what the button is standing next to.
- *
- * field is in a form, beside or under its inputs, and a dialog's: it matches them. bar is every
- * other, on a page, alone or in a row of controls, and the same on a phone: grown for a finger
- * it stood taller than the fields beside it and the text it sits in.
+ * One height for every button, the fields' (fieldHeight), wherever it stands: on a page, in a
+ * form, in a dialog, on a phone. Two heights had a page's controls and a dialog's disagree.
  */
-export type Size = "field" | "bar";
-
-const shapes: Record<Size, string> = {
-  field: "min-h-10 px-3 py-1.5 text-sm",
-  bar: "min-h-8 px-2.5 py-1 text-sm",
-};
+const shape = "min-h-8 px-2.5 py-1 text-sm";
 
 const styles: Record<Variant, string> = {
   solid: "bg-brand text-brand-ink hover:opacity-90",
@@ -30,28 +22,24 @@ const styles: Record<Variant, string> = {
 };
 
 /** A button's look, for a link that moves somewhere to wear as well. */
-export function buttonLook(variant: Variant = "quiet", size: Size = "field") {
-  const shape =
-    variant === "link"
-      ? "text-sm"
-      : `${shapes[size]} justify-center rounded-md`;
-  return `inline-flex items-center gap-1.5 disabled:opacity-50 ${shape} ${styles[variant]}`;
+export function buttonLook(variant: Variant = "quiet") {
+  const box =
+    variant === "link" ? "text-sm" : `${shape} justify-center rounded-md`;
+  return `inline-flex items-center gap-1.5 disabled:opacity-50 ${box} ${styles[variant]}`;
 }
 
 /** A label ends in "…" when the command stops to ask, and not when it acts on the press. */
 export function Button({
   variant = "quiet",
-  size = "field",
   className = "",
   ...props
 }: ComponentProps<"button"> & {
   variant?: Variant;
-  size?: Size;
 }) {
   return (
     <button
       type="button"
-      className={`${buttonLook(variant, size)} ${className}`}
+      className={`${buttonLook(variant)} ${className}`}
       {...props}
     />
   );

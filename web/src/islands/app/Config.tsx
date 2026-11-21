@@ -89,9 +89,7 @@ export function Config() {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <p className="flex-1 text-sm text-muted">{l.about}</p>
-              <Button size="bar" onClick={() => setAdding(l)}>
-                New {l.one}…
-              </Button>
+              <Button onClick={() => setAdding(l)}>New {l.one}…</Button>
             </div>
             <Files
               files={all.filter((f) => f.kind === l.kind)}
@@ -265,7 +263,6 @@ function StockList() {
         <SearchField
           placeholder="Find a filter or an action"
           aria-label="Find a stock filter or action"
-          size="bar"
           className="w-full sm:w-72"
           value={filter}
           onChange={setFilter}

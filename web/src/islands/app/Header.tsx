@@ -10,7 +10,7 @@ import { paths, type Route } from "@app/islands/app/route";
 import { StateDot, stateWords } from "@app/islands/app/state";
 
 const link =
-  "inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap text-muted hover:bg-fill hover:text-fg aria-[current=page]:bg-fill aria-[current=page]:text-fg pointer-coarse:min-h-9";
+  "inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap text-muted hover:bg-fill hover:text-fg aria-[current=page]:bg-fill aria-[current=page]:text-fg";
 
 const sections: { label: string; href: string; on: Route["page"][] }[] = [
   { label: "Overview", href: paths.overview(), on: ["overview"] },
@@ -92,7 +92,7 @@ export function Header({ route }: { route: Route }) {
           title={
             label ? "Config of this server, as F2B_LABEL names it" : "Config"
           }
-          className="group ml-auto inline-flex min-h-7 max-w-48 min-w-0 items-center gap-1.5 rounded-md bg-fill px-2 text-sm font-medium whitespace-nowrap hover:bg-control-hover pointer-coarse:min-h-9"
+          className="group ml-auto inline-flex min-h-8 max-w-48 min-w-0 items-center gap-1.5 rounded-md bg-fill px-2 text-sm font-medium whitespace-nowrap hover:bg-control-hover"
         >
           <CogIcon className="shrink-0 text-muted group-aria-[current=page]:text-brand" />
           {label ? <span className="truncate">{label}</span> : null}

@@ -84,7 +84,6 @@ export function Log() {
           <SearchField
             placeholder="Show only lines with…"
             aria-label="Show only lines with this"
-            size="bar"
             className="order-last w-full sm:order-none sm:w-96 lg:w-xl"
             value={filter}
             onChange={setFilter}
@@ -97,11 +96,7 @@ export function Log() {
                 : `${lines.length} lines`}
             </span>
           ) : null}
-          <Button
-            size="bar"
-            onClick={() => setPaused(!paused)}
-            aria-pressed={paused}
-          >
+          <Button onClick={() => setPaused(!paused)} aria-pressed={paused}>
             {paused ? "Follow" : "Pause"}
           </Button>
         </div>

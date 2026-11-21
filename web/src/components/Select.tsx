@@ -1,7 +1,7 @@
 import type { SelectHTMLAttributes } from "react";
 
 import { ChevronDownIcon } from "@app/components/icons/Icon";
-import { fieldLook, fieldSizes } from "@app/components/TextField";
+import { fieldHeight, fieldLook } from "@app/components/TextField";
 
 /**
  * The platform's own select, dressed as a field, with the chevron the rest of the interface
@@ -17,7 +17,7 @@ export function Select({
   return (
     <span className={`relative inline-flex items-center ${className}`}>
       <select
-        className={`${fieldLook} ${fieldSizes.field} h-10 w-full min-w-0 appearance-none pr-9`}
+        className={`${fieldLook} ${fieldHeight} h-8 w-full min-w-0 appearance-none pr-9`}
         {...props}
       >
         {children}

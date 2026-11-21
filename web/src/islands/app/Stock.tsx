@@ -41,7 +41,6 @@ export function Stock({ path }: { path: string }) {
           <span className="flex-1" />
           {kind ? (
             <Button
-              size="bar"
               variant="solid"
               onClick={() => go(paths.file(kind, local, true))}
             >

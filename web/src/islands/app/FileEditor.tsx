@@ -293,22 +293,16 @@ export function FileEditor({
             ) : null}
             {dirty && !fresh ? (
               <Button
-                size="bar"
                 disabled={busy}
                 onClick={() => base && setDraft(base.content)}
               >
                 Discard
               </Button>
             ) : null}
-            <Button
-              size="bar"
-              disabled={busy || loading}
-              onClick={() => check.mutate()}
-            >
+            <Button disabled={busy || loading} onClick={() => check.mutate()}>
               {check.isPending ? "Checking…" : "Check"}
             </Button>
             <Button
-              size="bar"
               variant="solid"
               disabled={busy || loading || !dirty}
               onClick={() => save.mutate()}
@@ -404,9 +398,7 @@ function OutcomeView({
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex-1 text-sm font-medium">{outcome.message}</p>
         {outcome.reopen ? (
-          <Button size="bar" onClick={onReopen}>
-            Open it again…
-          </Button>
+          <Button onClick={onReopen}>Open it again…</Button>
         ) : null}
       </div>
       {outcome.output && outcome.output !== "OK" ? (

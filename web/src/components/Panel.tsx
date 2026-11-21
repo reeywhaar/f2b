@@ -53,9 +53,7 @@ export function Panel({
             <p className="text-sm text-accent">
               {title} could not be read. {messageOf(state.error)}
             </p>
-            <Button size="bar" onClick={() => state.refetch()}>
-              Try again
-            </Button>
+            <Button onClick={() => state.refetch()}>Try again</Button>
           </div>
         ) : state?.isPending ? (
           (dummy ?? <DummyLines />)

@@ -1,11 +1,7 @@
 import { useRef, type InputHTMLAttributes } from "react";
 
 import { CrossIcon } from "@app/components/icons/Icon";
-import {
-  fieldLook,
-  fieldSizes,
-  type FieldSize,
-} from "@app/components/TextField";
+import { fieldHeight, fieldLook } from "@app/components/TextField";
 
 /**
  * A field that narrows what is shown, as it is typed, with a cross to empty it. The cross is the
@@ -14,17 +10,12 @@ import {
 export function SearchField({
   value,
   onChange,
-  size = "field",
   className = "",
   inputClassName = "",
   ...props
-}: Omit<
-  InputHTMLAttributes<HTMLInputElement>,
-  "value" | "onChange" | "size"
-> & {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> & {
   value: string;
   onChange: (value: string) => void;
-  size?: FieldSize;
   inputClassName?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -35,7 +26,7 @@ export function SearchField({
         type="search"
         autoComplete="off"
         spellCheck={false}
-        className={`${fieldLook} ${fieldSizes[size]} w-full min-w-0 pr-9 ${inputClassName}`}
+        className={`${fieldLook} ${fieldHeight} w-full min-w-0 pr-9 ${inputClassName}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         {...props}

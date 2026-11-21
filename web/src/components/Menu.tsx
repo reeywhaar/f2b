@@ -40,7 +40,6 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   return (
     <div ref={box} className="relative">
       <Button
-        size="bar"
         aria-label={label}
         title={label}
         aria-haspopup="menu"

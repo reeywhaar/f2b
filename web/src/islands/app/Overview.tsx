@@ -228,7 +228,6 @@ function Status() {
         {error ? <p className="text-xs text-accent">{error}</p> : null}
       </div>
       <Button
-        size="bar"
         disabled={!s || restart.isPending}
         onClick={async () => {
           setError("");
