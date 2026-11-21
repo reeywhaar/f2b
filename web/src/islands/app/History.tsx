@@ -103,7 +103,7 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
               {bans.map((b) => (
                 <li
                   key={b.id}
-                  className="flex flex-col gap-1 px-2 py-2.5 sm:px-4"
+                  className="flex flex-col gap-1 px-(--h-padding) py-2.5"
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                     {/* A column to read down on a wide screen. On a phone, when and for how

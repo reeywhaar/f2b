@@ -55,6 +55,21 @@
   --color-jail-8: #65c67d;
 }
 
+/*
+ * Horizontal padding: the page's gutters, and the insides of what sits on it, its cards, rows and
+ * dialogs. One value, so they all line up; on a phone, half of it, where width is short. Read as
+ * px-(--h-padding), never as a number of its own.
+ */
+:root {
+  --h-padding: 1rem;
+}
+
+@media (width < 40rem) {
+  :root {
+    --h-padding: calc(1rem / 2);
+  }
+}
+
 /* A plain override of the same variables rather than a second @theme: @theme is hoisted to the
    top level whatever it is nested in. */
 @media (prefers-color-scheme: dark) {

@@ -393,7 +393,7 @@ function OutcomeView({
   return (
     <div
       role="status"
-      className={`flex flex-col gap-2 rounded-lg border bg-bg px-2 py-3 sm:px-4 ${tones[outcome.tone]}`}
+      className={`flex flex-col gap-2 rounded-lg border bg-bg px-(--h-padding) py-3 ${tones[outcome.tone]}`}
     >
       <div className="flex flex-wrap items-center gap-3">
         <p className="flex-1 text-sm font-medium">{outcome.message}</p>

@@ -101,7 +101,7 @@ function Row({ ban }: { ban: CurrentBan }) {
     // Unban in a column of its own, so a long address wraps beside it rather than pushing it
     // onto a line of its own; the failed lines, opened, in a row of their own under both, at the
     // row's whole width. That is why they are not a <details>: its lines cannot leave its column.
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-2 py-3 sm:px-4">
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-(--h-padding) py-3">
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link

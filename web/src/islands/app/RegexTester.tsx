@@ -73,7 +73,7 @@ export function RegexTester({
       <Heading>Try it on a log</Heading>
       <form
         onSubmit={submit}
-        className="flex flex-col gap-3 rounded-lg border border-line bg-bg p-2 sm:p-4"
+        className="flex flex-col gap-3 rounded-lg border border-line bg-bg px-(--h-padding) py-3"
       >
         <Fields>
           <Field

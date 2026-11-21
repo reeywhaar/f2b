@@ -30,7 +30,7 @@ export function Login() {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 px-4">
+    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center gap-6 px-(--h-padding)">
       <h1 className="text-2xl font-semibold">
         <Wordmark />
       </h1>

@@ -17,7 +17,7 @@ export function Frame({
 }) {
   return (
     <main
-      className={`mx-auto flex w-full max-w-7xl flex-col gap-8 px-2 pt-6 sm:px-4 ${fill ? "min-h-0 flex-1 pb-2 sm:pb-4" : "pb-6"}`}
+      className={`mx-auto flex w-full max-w-7xl flex-col gap-8 px-(--h-padding) pt-6 ${fill ? "min-h-0 flex-1 pb-(--h-padding)" : "pb-6"}`}
     >
       {children}
     </main>

@@ -197,7 +197,7 @@ export function Dialog({
               What is beside the title wraps under it rather than running on. An id, a pin and
               an age do not shrink, and on one line on a phone they ran under the buttons at the
               right; now whatever does not fit goes to a second line, and the rest stays. */}
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2.5 sm:px-5">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-(--h-padding) py-2.5">
             {/* On the baseline: a title, a mono id, a project and an age are four sizes, and
                 centred each sat at its own height. An icon has no baseline, and says so with
                 self-center. */}
@@ -231,7 +231,7 @@ export function Dialog({
           {/* flex-auto, not flex-1, here and in what fills it: a card's height is fitted to its
               contents, and Safari fits a flex-1 child at its basis of 0 — the body came out as its
               padding and nothing else. Growing from what it holds still takes the slack on a phone. */}
-          <div className="flex min-h-0 flex-auto flex-col gap-4 overflow-y-auto overscroll-contain px-4 pt-4 sm:px-5">
+          <div className="flex min-h-0 flex-auto flex-col gap-4 overflow-y-auto overscroll-contain px-(--h-padding) pt-4">
             {/* Inside the title bar, so a body that throws still leaves its close. */}
             <Boundary what="This">{children}</Boundary>
             {/* A box with a height rather than padding on the box that scrolls.
@@ -243,7 +243,7 @@ export function Dialog({
             <div aria-hidden="true" className="h-2 shrink-0" />
           </div>
           {footer ? (
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line px-4 pt-4 pb-5 sm:px-5">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-line px-(--h-padding) pt-4 pb-5">
               {footer}
             </div>
           ) : null}

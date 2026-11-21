@@ -108,7 +108,7 @@ export function Log() {
             stuck.current =
               el.scrollHeight - el.scrollTop - el.clientHeight < 24;
           }}
-          className="scroll-thin min-h-48 flex-1 overflow-auto rounded-lg border border-line bg-(--color-code-bg) p-2 font-mono sm:p-3 text-[11px] leading-relaxed"
+          className="scroll-thin min-h-48 flex-1 overflow-auto rounded-lg border border-line bg-(--color-code-bg) px-(--h-padding) py-2 font-mono text-[11px] leading-relaxed"
         >
           {/* Not read yet and read empty are two things: the first is a shape where lines will
               be, or nothing at all beside the error that says why; only the second is told. */}

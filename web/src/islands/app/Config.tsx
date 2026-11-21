@@ -206,7 +206,7 @@ function FileRow({
   return (
     <Link
       href={href}
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-0.5 px-2 py-2.5 hover:bg-fill sm:px-4 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-0.5 px-(--h-padding) py-2.5 hover:bg-fill sm:grid-cols-[auto_minmax(0,1fr)_auto]"
     >
       <span className="col-start-1 row-start-1 truncate font-mono text-sm">
         {name}
@@ -280,10 +280,10 @@ function StockList() {
                 open={!!filter}
                 className="rounded-lg border border-line bg-bg"
               >
-                <summary className="cursor-pointer px-2 py-2 text-sm select-none hover:bg-fill sm:px-4">
+                <summary className="cursor-pointer px-(--h-padding) py-2 text-sm select-none hover:bg-fill">
                   {g.title} <span className="text-faint">{g.names.length}</span>
                 </summary>
-                <ul className="grid grid-cols-1 gap-x-4 border-t border-line px-2 py-2 sm:grid-cols-2 sm:px-4 lg:grid-cols-3">
+                <ul className="grid grid-cols-1 gap-x-4 border-t border-line px-(--h-padding) py-2 sm:grid-cols-2 lg:grid-cols-3">
                   {g.names.map((n) => (
                     <li key={n}>
                       <Link
