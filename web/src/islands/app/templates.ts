@@ -70,3 +70,24 @@ maxretry = 5
 `;
   }
 }
+
+/**
+ * Content a new file was made from, handed to its editor across the navigation: a duplicate's.
+ * Kept until the file is saved, so the editor reading it twice, as React does while developing,
+ * reads it the same both times. A reload of the page starts from the template instead.
+ */
+const seeds = new Map<string, string>();
+
+const seedKey = (kind: Kind, name: string) => `${kind}/${name}`;
+
+export function seed(kind: Kind, name: string, content: string) {
+  seeds.set(seedKey(kind, name), content);
+}
+
+export function seeded(kind: Kind, name: string): string | undefined {
+  return seeds.get(seedKey(kind, name));
+}
+
+export function unseed(kind: Kind, name: string) {
+  seeds.delete(seedKey(kind, name));
+}

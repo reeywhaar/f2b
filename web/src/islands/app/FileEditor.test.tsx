@@ -167,4 +167,27 @@ describe("saving a file", () => {
       expect(go).toHaveBeenCalledWith("/config/filters/right.local", true),
     );
   });
+
+  it("duplicates what is in the editor into a new file, opened unsaved", async () => {
+    getFile.mockResolvedValue({ file, content: "[Definition]\n" });
+    const view = mount(
+      <FileEditor kind="filters" name="app.local" fresh={false} />,
+    );
+    const editor = await screen.findByLabelText("app.local, editable");
+    fireEvent.change(editor, {
+      target: { value: "[Definition]\nfailregex = <ADDR>\n" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Duplicate…" }));
+    const field = await screen.findByDisplayValue("app-copy");
+    fireEvent.change(field, { target: { value: "app-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open the copy" }));
+    expect(go).toHaveBeenCalledWith("/config/filters/app-2.local?new=1");
+
+    view.unmount();
+    mount(<FileEditor kind="filters" name="app-2.local" fresh />);
+    const copy = (await screen.findByLabelText(
+      "app-2.local, editable",
+    )) as HTMLTextAreaElement;
+    expect(copy.value).toBe("[Definition]\nfailregex = <ADDR>\n");
+  });
 });

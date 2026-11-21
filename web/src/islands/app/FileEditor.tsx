@@ -19,9 +19,10 @@ import { CodeEditor } from "@app/editor/CodeEditor";
 import { ago } from "@app/format";
 import { Link } from "@app/islands/app/Link";
 import { RegexTester } from "@app/islands/app/RegexTester";
+import { NameDialog } from "@app/islands/app/NameDialog";
 import { RenameDialog } from "@app/islands/app/RenameDialog";
 import { go, hold, paths } from "@app/islands/app/route";
-import { templateFor } from "@app/islands/app/templates";
+import { seed, seeded, templateFor, unseed } from "@app/islands/app/templates";
 
 const dirs: Record<Kind, string> = {
   jails: "jail.d/",
@@ -74,12 +75,13 @@ export function FileEditor({
   const [draft, setDraft] = useState("");
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [renaming, setRenaming] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => {
     if (base) return;
     if (fresh) {
       if (stock.isPending && (kind === "filters" || kind === "actions")) return;
-      const content = templateFor(kind, name, stock.data);
+      const content = seeded(kind, name) ?? templateFor(kind, name, stock.data);
       setBase({ content: "", version: "" });
       setDraft(content);
     } else if (file.data) {
@@ -126,6 +128,7 @@ export function FileEditor({
       putFile(kind, name, { content: draft, version: base?.version ?? "" }),
     onMutate: () => setOutcome(null),
     onSuccess: (applied) => {
+      unseed(kind, name);
       const saved = applied.file!;
       setBase({ content: draft, version: saved.version });
       client.setQueryData(qk.file(kind, name), { file: saved, content: draft });
@@ -271,6 +274,15 @@ export function FileEditor({
             Rename…
           </Button>
         ) : null}
+        {!fresh && file.data && kind !== "settings" ? (
+          <Button
+            size="bar"
+            disabled={busy}
+            onClick={() => setDuplicating(true)}
+          >
+            Duplicate…
+          </Button>
+        ) : null}
         {dirty && !fresh ? (
           <Button
             size="bar"
@@ -323,6 +335,21 @@ export function FileEditor({
       {kind === "filters" && base !== null ? (
         <RegexTester file={name} content={draft} />
       ) : null}
+      <NameDialog
+        open={duplicating}
+        onClose={() => setDuplicating(false)}
+        title={`Duplicate ${name}`}
+        suggest={`${name.replace(/\.(local|conf)$/, "")}-copy`}
+        taken={name}
+        action="Open the copy"
+        dir={dirs[kind].replace(/\/$/, "")}
+        hint="A new file with what is in the editor now, as it is, not saved until you save it."
+        onName={(to) => {
+          setDuplicating(false);
+          seed(kind, to, draft);
+          go(paths.file(kind, to, true));
+        }}
+      />
       <RenameDialog
         open={renaming}
         onClose={() => setRenaming(false)}

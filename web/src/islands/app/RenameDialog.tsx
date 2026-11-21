@@ -9,12 +9,9 @@ import { Button } from "@app/components/Button";
 import { Dialog } from "@app/components/Dialog";
 import { Field } from "@app/components/Field";
 import { TextField } from "@app/components/TextField";
+import { withExtension } from "@app/islands/app/NameDialog";
 
 const bare = (n: string) => n.replace(/\.(local|conf)$/, "");
-
-/** A name as fail2ban reads it: .local unless it says .conf. */
-const withExtension = (n: string) =>
-  n.endsWith(".local") || n.endsWith(".conf") ? n : `${n}.local`;
 
 /**
  * A new name for a file. A jail names a filter or an action by its file's name, so the jails

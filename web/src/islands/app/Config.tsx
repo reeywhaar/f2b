@@ -1,19 +1,17 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getFiles, getStock } from "@app/api/actions";
 import { qk } from "@app/api/keys";
 import type { File, Kind } from "@app/api/types";
 import { Button } from "@app/components/Button";
-import { Dialog } from "@app/components/Dialog";
 import { DummyRows } from "@app/components/Dummy";
-import { Field } from "@app/components/Field";
 import { Frame } from "@app/components/Frame";
 import { Panel } from "@app/components/Panel";
 import { SearchField } from "@app/components/SearchField";
-import { TextField } from "@app/components/TextField";
 import { ago, size } from "@app/format";
 import { Link } from "@app/islands/app/Link";
+import { NameDialog } from "@app/islands/app/NameDialog";
 import { go, paths } from "@app/islands/app/route";
 import { Session } from "@app/islands/app/Session";
 
@@ -130,7 +128,32 @@ export function Config() {
       </Panel>
       <StockList />
       <Session />
-      <NewFile kind={adding} onClose={() => setAdding(null)} />
+      <NameDialog
+        open={adding !== null}
+        onClose={() => setAdding(null)}
+        title={adding ? `New ${adding.one}` : ""}
+        suggest=""
+        taken=""
+        action="Open the editor"
+        dir={adding?.dir}
+        placeholder={
+          adding?.kind === "jails"
+            ? "sshd"
+            : adding?.kind === "filters"
+              ? "my-app"
+              : "notify"
+        }
+        hint={
+          adding?.kind === "jails"
+            ? "The file's name. The jail's own name is the section inside it, which the editor starts with this one."
+            : "A jail names a filter or an action by this, without .local. Named after a stock one, it overrides that one's settings."
+        }
+        onName={(name) => {
+          if (!adding) return;
+          setAdding(null);
+          go(paths.file(adding.kind, name, true));
+        }}
+      />
     </Frame>
   );
 }
@@ -170,95 +193,6 @@ function Files({
         </li>
       ))}
     </ul>
-  );
-}
-
-const fileName = /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,95}$/;
-
-/** A name as fail2ban reads it: .local unless it says .conf. */
-const withExtension = (n: string) =>
-  n.endsWith(".local") || n.endsWith(".conf") ? n : `${n}.local`;
-
-/** A name, and then the editor, with what a new file of the kind starts with. */
-function NewFile({
-  kind,
-  onClose,
-}: {
-  kind: (typeof lists)[number] | null;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [error, setError] = useState("");
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (!kind) return;
-    const n = withExtension(name.trim());
-    if (!fileName.test(n)) {
-      setError(
-        "Letters, digits, dots, dashes and underscores, starting with a letter or a digit.",
-      );
-      return;
-    }
-    setName("");
-    setError("");
-    onClose();
-    go(paths.file(kind.kind, n, true));
-  };
-  return (
-    <Dialog
-      open={kind !== null}
-      onClose={onClose}
-      title={kind ? `New ${kind.one}` : ""}
-      footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button
-            variant="solid"
-            type="submit"
-            form="new-file"
-            disabled={!name.trim()}
-          >
-            Open the editor
-          </Button>
-        </>
-      }
-    >
-      <form id="new-file" onSubmit={submit}>
-        <Field
-          label="Name"
-          hint={
-            kind?.kind === "jails"
-              ? "The file's name. The jail's own name is the section inside it, which the editor starts with this one."
-              : "A jail names a filter or an action by this, without .local. Named after a stock one, it overrides that one's settings."
-          }
-        >
-          <TextField
-            data-autofocus
-            className="w-full font-mono"
-            placeholder={
-              kind?.kind === "jails"
-                ? "sshd"
-                : kind?.kind === "filters"
-                  ? "my-app"
-                  : "notify"
-            }
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="off"
-          />
-        </Field>
-      </form>
-      {kind ? (
-        <p className="text-sm text-muted">
-          It is saved as{" "}
-          <code className="font-mono text-xs">
-            {kind.dir}/{withExtension(name.trim() || "…")}
-          </code>{" "}
-          once fail2ban accepts it.
-        </p>
-      ) : null}
-      {error ? <p className="text-sm text-accent">{error}</p> : null}
-    </Dialog>
   );
 }
 
