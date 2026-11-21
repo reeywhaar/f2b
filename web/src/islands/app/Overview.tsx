@@ -85,7 +85,7 @@ export function Overview({ days }: { days: number }) {
             ))}
           </div>
         </div>
-        <div className="rounded-lg border border-line bg-bg p-3">
+        <div className="rounded-lg border border-line bg-bg p-2 sm:p-3">
           {stats.isError ? (
             <p className="text-sm text-accent">{messageOf(stats.error)}</p>
           ) : stats.data ? (
@@ -171,7 +171,7 @@ function Tile({
     </>
   );
   const look =
-    "flex flex-col gap-1 rounded-lg border border-line bg-bg px-4 py-3";
+    "flex flex-col gap-1 rounded-lg border border-line bg-bg px-2 py-3 sm:px-4";
   return href ? (
     <Link href={href} className={`${look} hover:border-axis`}>
       {body}
@@ -199,7 +199,7 @@ function Status() {
   const s = engine.data?.fail2ban;
 
   return (
-    <section className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-bg px-4 py-3">
+    <section className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-bg px-2 py-3 sm:px-4">
       <StateDot state={engine.isError ? "unreachable" : s?.state} />
       <div className="flex min-w-0 flex-1 flex-col">
         <p className="text-sm font-medium">
@@ -273,7 +273,7 @@ function Jails({
           last of them broke a letter a line. */}
       <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg sm:hidden">
         {jails.map((j) => (
-          <li key={j.name} className="flex flex-col gap-1 px-4 py-2.5">
+          <li key={j.name} className="flex flex-col gap-1 px-2 py-2.5 sm:px-4">
             <div className="flex items-center gap-2">
               <span
                 aria-hidden="true"

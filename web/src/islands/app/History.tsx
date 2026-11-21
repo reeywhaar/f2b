@@ -103,7 +103,10 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
           <div className="flex flex-col gap-3">
             <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg">
               {bans.map((b) => (
-                <li key={b.id} className="flex flex-col gap-1 px-4 py-2.5">
+                <li
+                  key={b.id}
+                  className="flex flex-col gap-1 px-2 py-2.5 sm:px-4"
+                >
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                     {/* A column to read down on a wide screen. On a phone, when and for how
                         long make a line of their own under the address, every row alike. */}
