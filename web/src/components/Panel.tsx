@@ -16,6 +16,7 @@ import { Heading } from "@app/components/Heading";
 export function Panel({
   title,
   aside,
+  filter,
   state,
   dummy,
   children,
@@ -23,6 +24,11 @@ export function Panel({
   title: string;
   /** A command beside the name, for the section as a whole: there while it loads, or fails. */
   aside?: ReactNode;
+  /**
+   * What narrows the section, under its name and against what it narrows. Outside the wait: a
+   * field that went while the narrowed list loaded would go from under the typing.
+   */
+  filter?: ReactNode;
   /** The query this section is waiting on, if it waits on one. */
   state?: {
     isPending: boolean;
@@ -43,6 +49,7 @@ export function Panel({
       ) : (
         <Heading>{title}</Heading>
       )}
+      {filter ? <div className="mb-2">{filter}</div> : null}
       <Boundary what={title} onReset={() => state?.refetch()}>
         {state?.isError ? (
           <div className="flex flex-wrap items-center gap-3">

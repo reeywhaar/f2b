@@ -57,35 +57,40 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
 
   return (
     <Frame>
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchField
-          placeholder="An address"
-          aria-label="Only the bans of this address"
-          className="w-full sm:w-72"
-          inputClassName="font-mono"
-          value={typed}
-          onChange={(v) => {
-            setTyped(v);
-            // Emptied is shown at once: there is nothing more coming.
-            if (v === "") show("");
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") show(typed.trim());
-          }}
-        />
-        <Picker
-          label="Jail"
-          className="w-full sm:w-56"
-          value={jail}
-          options={[
-            { value: "", label: "Every jail" },
-            ...names.map((n) => ({ value: n, label: n })),
-          ]}
-          onChange={(v) => go(paths.history({ jail: v, ip }), true)}
-        />
-      </div>
-
-      <Panel title="Bans" state={history} dummy={<DummyRows count={8} />}>
+      <Panel
+        title="Bans"
+        filter={
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchField
+              placeholder="An address"
+              aria-label="Only the bans of this address"
+              className="w-full sm:w-72"
+              inputClassName="font-mono"
+              value={typed}
+              onChange={(v) => {
+                setTyped(v);
+                // Emptied is shown at once: there is nothing more coming.
+                if (v === "") show("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") show(typed.trim());
+              }}
+            />
+            <Picker
+              label="Jail"
+              className="w-full sm:w-56"
+              value={jail}
+              options={[
+                { value: "", label: "Every jail" },
+                ...names.map((n) => ({ value: n, label: n })),
+              ]}
+              onChange={(v) => go(paths.history({ jail: v, ip }), true)}
+            />
+          </div>
+        }
+        state={history}
+        dummy={<DummyRows count={8} />}
+      >
         {bans.length === 0 ? (
           <p className="text-sm text-muted">
             {jail || ip
