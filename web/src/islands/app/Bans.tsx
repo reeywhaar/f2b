@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { deleteBansByIp, getBans, getJails, postBans } from "@app/api/actions";
@@ -85,6 +85,8 @@ function Row({ ban }: { ban: CurrentBan }) {
   const client = useQueryClient();
   const confirm = useConfirm();
   const [error, setError] = useState("");
+  const [lines, setLines] = useState(false);
+  const linesId = useId();
   const unban = useMutation({
     mutationFn: () => deleteBansByIp(ban.ip, ban.jail),
     onSuccess: () => {
@@ -97,9 +99,10 @@ function Row({ ban }: { ban: CurrentBan }) {
 
   return (
     // Unban in a column of its own, so a long address wraps beside it rather than pushing it
-    // onto a line of its own.
-    <li className="flex items-start gap-3 px-2 py-3 sm:px-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
+    // onto a line of its own; the failed lines, opened, in a row of their own under both, at the
+    // row's whole width. That is why they are not a <details>: its lines cannot leave its column.
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-2 py-3 sm:px-4">
+      <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
             href={paths.history({ ip: ban.ip })}
@@ -139,17 +142,22 @@ function Row({ ban }: { ban: CurrentBan }) {
           </span>
         </div>
         {ban.matches.length > 0 ? (
-          <details className="text-xs">
-            <summary className="cursor-pointer text-muted select-none hover:text-fg">
+          <button
+            type="button"
+            aria-expanded={lines}
+            aria-controls={linesId}
+            onClick={() => setLines(!lines)}
+            className="self-start text-left text-xs text-muted select-none hover:text-fg"
+          >
+            {/* The triangle a <summary> draws, from the same list style. */}
+            <span
+              className={`list-item list-inside ${lines ? "[list-style-type:disclosure-open]" : "[list-style-type:disclosure-closed]"}`}
+            >
               {ban.failures || ban.matches.length}{" "}
               {ban.failures === 1 ? "failure" : "failures"}: the lines
-            </summary>
-            <pre className="scroll-thin mt-1 overflow-x-auto rounded-md bg-(--color-code-bg) p-2 font-mono text-[11px] leading-relaxed text-muted">
-              {ban.matches.join("\n")}
-            </pre>
-          </details>
+            </span>
+          </button>
         ) : null}
-        {error ? <p className="text-xs text-accent">{error}</p> : null}
       </div>
       <Button
         className="shrink-0"
@@ -178,6 +186,15 @@ function Row({ ban }: { ban: CurrentBan }) {
       >
         Unban…
       </Button>
+      {lines ? (
+        <pre
+          id={linesId}
+          className="scroll-thin col-span-2 overflow-x-auto rounded-md bg-(--color-code-bg) p-2 font-mono text-[11px] leading-relaxed text-muted"
+        >
+          {ban.matches.join("\n")}
+        </pre>
+      ) : null}
+      {error ? <p className="col-span-2 text-xs text-accent">{error}</p> : null}
     </li>
   );
 }
