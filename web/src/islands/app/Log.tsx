@@ -84,7 +84,8 @@ export function Log() {
           <SearchField
             placeholder="Show only lines with…"
             aria-label="Show only lines with this"
-            className="order-last w-full sm:order-none sm:w-72"
+            size="bar"
+            className="order-last w-full sm:order-none sm:w-96 lg:w-xl"
             value={filter}
             onChange={setFilter}
           />
