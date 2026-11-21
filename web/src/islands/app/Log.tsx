@@ -4,7 +4,7 @@ import { getLog } from "@app/api/actions";
 import { messageOf } from "@app/api/transport";
 import { Button } from "@app/components/Button";
 import { Frame } from "@app/components/Frame";
-import { TextField } from "@app/components/TextField";
+import { SearchField } from "@app/components/SearchField";
 
 /** How many lines the page keeps, the engine's own window. */
 const keep = 5000;
@@ -74,13 +74,12 @@ export function Log() {
   return (
     <Frame>
       <div className="flex flex-wrap items-center gap-2">
-        <TextField
-          type="search"
+        <SearchField
           placeholder="Show only lines with…"
           aria-label="Show only lines with this"
           className="w-full sm:w-72"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={setFilter}
         />
         <span className="flex-1" />
         <span className="text-xs text-muted tabular-nums">

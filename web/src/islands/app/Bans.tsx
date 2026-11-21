@@ -9,10 +9,11 @@ import { Button } from "@app/components/Button";
 import { useConfirm } from "@app/components/Confirm";
 import { Dialog } from "@app/components/Dialog";
 import { DummyRows } from "@app/components/Dummy";
-import { Field, Fields } from "@app/components/Field";
+import { Field, Fields, Group } from "@app/components/Field";
 import { Frame } from "@app/components/Frame";
 import { Panel } from "@app/components/Panel";
-import { Select } from "@app/components/Select";
+import { Picker } from "@app/components/Picker";
+import { SearchField } from "@app/components/SearchField";
 import { TextField } from "@app/components/TextField";
 import { ago, dateTime, span, until } from "@app/format";
 import { Link } from "@app/islands/app/Link";
@@ -38,13 +39,12 @@ export function Bans() {
   return (
     <Frame>
       <div className="flex flex-wrap items-center gap-2">
-        <TextField
-          type="search"
+        <SearchField
           placeholder="Address or jail"
           aria-label="Show only bans of an address or a jail"
           className="w-full sm:w-72"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={setFilter}
         />
         <span className="flex-1" />
         <Button variant="solid" onClick={() => setAdding(true)}>
@@ -239,22 +239,23 @@ function BanDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
               autoComplete="off"
             />
           </Field>
-          <Field
+          {/* A group, not a label: the picker's own dialog is inside it, and a click there would
+              otherwise be taken as a click on the picker. */}
+          <Group
             label="Jail"
             hint="The ban is the jail's: its action does the blocking, and it lasts the jail's ban time."
           >
-            <Select
+            <Picker
+              label="Jail"
               className="w-full"
               value={jail || jails.data?.jails[0]?.name || ""}
-              onChange={(e) => setJail(e.target.value)}
-            >
-              {(jails.data?.jails ?? []).map((j) => (
-                <option key={j.name} value={j.name}>
-                  {j.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+              options={(jails.data?.jails ?? []).map((j) => ({
+                value: j.name,
+                label: j.name,
+              }))}
+              onChange={setJail}
+            />
+          </Group>
         </Fields>
       </form>
       {error ? <p className="text-sm text-accent">{error}</p> : null}

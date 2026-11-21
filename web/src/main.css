@@ -110,6 +110,12 @@ body {
   color: var(--color-fg);
 }
 
+/* SearchField draws its own cross, which every browser then agrees on. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* Under 16px iOS Safari zooms the page on focus. */
 input,
 select,

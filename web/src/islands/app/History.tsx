@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { getHistory, getJails, getStats } from "@app/api/actions";
@@ -7,8 +7,9 @@ import { Button } from "@app/components/Button";
 import { DummyRows } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
 import { Panel } from "@app/components/Panel";
-import { Select } from "@app/components/Select";
-import { TextField } from "@app/components/TextField";
+import { Picker } from "@app/components/Picker";
+import { SearchField } from "@app/components/SearchField";
+import { useDebounced } from "@app/debounce";
 import { dateTime, span } from "@app/format";
 import { go, paths } from "@app/islands/app/route";
 
@@ -40,44 +41,48 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
   });
   const bans = history.data?.pages.flatMap((p) => p.bans) ?? [];
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    go(paths.history({ jail, ip: typed.trim() }), true);
+  // The address applies itself once typing pauses. The route is read through a ref, so a click
+  // on an address in the list, which moves the route first, is not undone by the pause catching
+  // up with what was typed before it.
+  const route = useRef({ jail, ip });
+  route.current = { jail, ip };
+  const show = (address: string) => {
+    if (address !== route.current.ip) {
+      go(paths.history({ jail: route.current.jail, ip: address }), true);
+    }
   };
+  const settled = useDebounced(typed.trim(), 400);
+  useEffect(() => show(settled), [settled]);
 
   return (
     <Frame>
-      <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
-        <TextField
-          type="search"
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchField
           placeholder="An address"
           aria-label="Only the bans of this address"
-          className="w-full font-mono sm:w-72"
+          className="w-full sm:w-72"
+          inputClassName="font-mono"
           value={typed}
-          onChange={(e) => setTyped(e.target.value)}
+          onChange={(v) => {
+            setTyped(v);
+            // Emptied is shown at once: there is nothing more coming.
+            if (v === "") show("");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") show(typed.trim());
+          }}
         />
-        <Select
-          aria-label="Only the bans in this jail"
+        <Picker
+          label="Jail"
           className="w-full sm:w-56"
           value={jail}
-          onChange={(e) =>
-            go(paths.history({ jail: e.target.value, ip }), true)
-          }
-        >
-          <option value="">Every jail</option>
-          {names.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </Select>
-        <Button type="submit">Show</Button>
-        {jail || ip ? (
-          <Button variant="link" onClick={() => go(paths.history(), true)}>
-            Show everything
-          </Button>
-        ) : null}
-      </form>
+          options={[
+            { value: "", label: "Every jail" },
+            ...names.map((n) => ({ value: n, label: n })),
+          ]}
+          onChange={(v) => go(paths.history({ jail: v, ip }), true)}
+        />
+      </div>
 
       <Panel title="Bans" state={history} dummy={<DummyRows count={8} />}>
         {bans.length === 0 ? (

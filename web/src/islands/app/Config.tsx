@@ -10,6 +10,7 @@ import { DummyRows } from "@app/components/Dummy";
 import { Field } from "@app/components/Field";
 import { Frame } from "@app/components/Frame";
 import { Panel } from "@app/components/Panel";
+import { SearchField } from "@app/components/SearchField";
 import { TextField } from "@app/components/TextField";
 import { ago, size } from "@app/format";
 import { Link } from "@app/islands/app/Link";
@@ -287,13 +288,12 @@ function StockList() {
           <code className="font-mono text-xs">.conf</code>; override one from
           its page.
         </p>
-        <TextField
-          type="search"
+        <SearchField
           placeholder="Find a filter or an action"
           aria-label="Find a stock filter or action"
           className="w-full sm:w-72"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={setFilter}
         />
         {total === 0 ? (
           <p className="text-sm text-faint">
