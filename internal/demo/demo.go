@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -142,12 +143,15 @@ func seed(d *daemon, js []jail, r *rand.Rand, database string) error {
 			return err
 		}
 	}
-	counts := map[[2]string]int64{}
-	type latest struct {
-		at, banTime, count int64
-		data               string
+	// Made first and written in the order they happened, as fail2ban writes them: the history
+	// reads newest first by the order of writing, and a ban's count is which one it was.
+	type event struct {
+		j       jail
+		ip      string
+		at      time.Time
+		matches []string
 	}
-	bips := map[[2]string]latest{}
+	var events []event
 	for day := days; day >= 0; day-- {
 		// Busier lately, and busier on weekdays, so the chart has a shape.
 		trend := 0.55 + 0.45*float64(days-day)/days
@@ -156,31 +160,39 @@ func seed(d *daemon, js []jail, r *rand.Rand, database string) error {
 			trend *= 0.7
 		}
 		for _, j := range js {
-			n := poisson(j.perDay*trend, r)
-			for range n {
+			for range poisson(j.perDay*trend, r) {
 				at := date.Add(-time.Duration(r.IntN(86400)) * time.Second)
 				if at.After(now) {
 					continue
 				}
 				ip := address(r)
-				k := [2]string{j.name, ip}
-				counts[k]++
 				var matches []string
 				for i := range 3 + r.IntN(3) {
 					matches = append(matches, j.line(at.Add(-time.Duration(30*(5-i))*time.Second), ip, r))
 				}
-				data, _ := json.Marshal(map[string]any{"matches": matches, "failures": len(matches)})
-				if _, err := tx.Exec(`INSERT INTO bans(jail, ip, timeofban, bantime, bancount, data) VALUES (?, ?, ?, ?, ?, ?)`,
-					j.name, ip, at.Unix(), j.banTime, counts[k], string(data)); err != nil {
-					return err
-				}
-				if prev, ok := bips[k]; !ok || prev.at < at.Unix() {
-					bips[k] = latest{at.Unix(), j.banTime, counts[k], string(data)}
-				}
-				d.bannedTotal[j.name]++
-				d.failedTotal[j.name] += int64(len(matches))
+				events = append(events, event{j, ip, at, matches})
 			}
 		}
+	}
+	sort.Slice(events, func(a, b int) bool { return events[a].at.Before(events[b].at) })
+
+	counts := map[[2]string]int64{}
+	type latest struct {
+		at, banTime, count int64
+		data               string
+	}
+	bips := map[[2]string]latest{}
+	for _, e := range events {
+		k := [2]string{e.j.name, e.ip}
+		counts[k]++
+		data, _ := json.Marshal(map[string]any{"matches": e.matches, "failures": len(e.matches)})
+		if _, err := tx.Exec(`INSERT INTO bans(jail, ip, timeofban, bantime, bancount, data) VALUES (?, ?, ?, ?, ?, ?)`,
+			e.j.name, e.ip, e.at.Unix(), e.j.banTime, counts[k], string(data)); err != nil {
+			return err
+		}
+		bips[k] = latest{e.at.Unix(), e.j.banTime, counts[k], string(data)}
+		d.bannedTotal[e.j.name]++
+		d.failedTotal[e.j.name] += int64(len(e.matches))
 	}
 	for k, b := range bips {
 		if _, err := tx.Exec(`INSERT INTO bips(ip, jail, timeofban, bantime, bancount, data) VALUES (?, ?, ?, ?, ?, ?)`,
