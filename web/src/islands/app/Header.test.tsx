@@ -40,4 +40,19 @@ describe("the header", () => {
     expect(await screen.findByText("hellogram")).toBeTruthy();
     await waitFor(() => expect(document.title).toBe("hellogram · f2b"));
   });
+
+  it("goes to Config by the server's name, and marks it while there", async () => {
+    mount(
+      <Header
+        route={{ page: "file", kind: "jails", name: "x.local", fresh: false }}
+      />,
+    );
+    const config = await screen.findByRole("link", {
+      name: "hellogram: Config",
+    });
+    expect(config.getAttribute("href")).toBe("/config");
+    expect(config.getAttribute("aria-current")).toBe("page");
+    const nav = screen.getByRole("navigation");
+    expect(nav.querySelector('a[href="/config"]')).toBeNull();
+  });
 });

@@ -150,6 +150,17 @@ export const ChevronDownIcon = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+/**
+ * Six teeth rather than eight: at 14px with a 2px stroke, eight close the gaps between them and
+ * the outline reads as a blurred ring.
+ */
+export const CogIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M9.68 4.87 10 1.69a10.5 10.5 0 0 1 4 0l.32 3.18a7.5 7.5 0 0 1 2.7 1.56l2.9-1.32a10.5 10.5 0 0 1 2.01 3.47l-2.59 1.86a7.5 7.5 0 0 1 0 3.12l2.59 1.86a10.5 10.5 0 0 1-2.01 3.47l-2.9-1.32a7.5 7.5 0 0 1-2.7 1.56L14 22.31a10.5 10.5 0 0 1-4 0l-.32-3.18a7.5 7.5 0 0 1-2.7-1.56l-2.9 1.32a10.5 10.5 0 0 1-2.01-3.47l2.59-1.86a7.5 7.5 0 0 1 0-3.12L2.07 8.58a10.5 10.5 0 0 1 2.01-3.47l2.9 1.32a7.5 7.5 0 0 1 2.7-1.56Z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+);
+
 export const SearchIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <circle cx="11" cy="11" r="6" />

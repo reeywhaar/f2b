@@ -14,9 +14,9 @@
   --color-fill: #f0f1f3;
   --color-control: #f2f3f5;
   --color-control-hover: #e8eaed;
-  /* Ochre. The ink on it is near-black: white on it is 2.8:1, this 6.7:1. */
+  /* Ochre, and white on it, at 2.8:1. */
   --color-brand: #c39144;
-  --color-brand-ink: #111113;
+  --color-brand-ink: #ffffff;
   --color-accent: #b91c1c;
   --color-grid: #eceef1;
   --color-axis: #c9cdd3;
@@ -69,7 +69,7 @@
     --color-control: #2a2c31;
     --color-control-hover: #33363c;
     --color-brand: #c39144;
-    --color-brand-ink: #111113;
+    --color-brand-ink: #ffffff;
     --color-accent: #f87171;
     --color-grid: #2a2c31;
     --color-axis: #3b3f46;

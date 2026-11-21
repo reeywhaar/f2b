@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getAuthMe, getEngine } from "@app/api/actions";
 import { qk } from "@app/api/keys";
+import { CogIcon } from "@app/components/icons/Icon";
 import { Wordmark } from "@app/components/Wordmark";
 import { Link } from "@app/islands/app/Link";
 import { paths, type Route } from "@app/islands/app/route";
@@ -15,13 +16,15 @@ const sections: { label: string; href: string; on: Route["page"][] }[] = [
   { label: "Overview", href: paths.overview(), on: ["overview"] },
   { label: "Bans", href: paths.bans, on: ["bans"] },
   { label: "History", href: paths.history(), on: ["history"] },
-  { label: "Config", href: paths.config, on: ["config", "file", "stock"] },
   { label: "Log", href: paths.log, on: ["log"] },
 ];
 
+/** Where the configuration is: the label's link, not a section beside the others. */
+const configPages: Route["page"][] = ["config", "file", "stock"];
+
 /**
  * The bar across the top: the name; the sections, the log's carrying how fail2ban is doing; and
- * which server this is, when F2B_LABEL says.
+ * the way to this server's configuration, named as F2B_LABEL names the server.
  */
 export function Header({ route }: { route: Route }) {
   const engine = useQuery({
@@ -81,14 +84,20 @@ export function Header({ route }: { route: Route }) {
             </Link>
           ))}
         </nav>
-        {label ? (
-          <span
-            title="This server, as F2B_LABEL names it"
-            className="ml-auto max-w-48 truncate rounded-md bg-fill px-2 py-0.5 text-sm font-medium whitespace-nowrap"
-          >
-            {label}
-          </span>
-        ) : null}
+        {/* This server's settings, under its name: a cog alone where there is no label, in the
+            brand's color while they are open. */}
+        <Link
+          href={paths.config}
+          aria-current={configPages.includes(route.page) ? "page" : undefined}
+          title={
+            label ? "Config of this server, as F2B_LABEL names it" : "Config"
+          }
+          className="group ml-auto inline-flex min-h-7 max-w-48 min-w-0 items-center gap-1.5 rounded-md bg-fill px-2 text-sm font-medium whitespace-nowrap hover:bg-control-hover pointer-coarse:min-h-9"
+        >
+          <CogIcon className="shrink-0 text-muted group-aria-[current=page]:text-brand" />
+          {label ? <span className="truncate">{label}</span> : null}
+          <span className="sr-only">{label ? ": Config" : "Config"}</span>
+        </Link>
       </div>
     </header>
   );
