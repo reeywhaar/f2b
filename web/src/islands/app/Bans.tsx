@@ -53,7 +53,7 @@ export function Bans() {
             <SearchField
               placeholder="Address or jail"
               aria-label="Show only bans of an address or a jail"
-              className="w-full sm:w-72"
+              className="w-full sm:w-96 lg:w-xl"
               value={filter}
               onChange={setFilter}
             />
