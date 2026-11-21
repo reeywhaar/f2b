@@ -164,10 +164,12 @@ func (d *stubDaemon) Banned(context.Context) (map[string][]string, error) { retu
 func (d *stubDaemon) Ban(context.Context, string, string) error           { return nil }
 func (d *stubDaemon) Unban(context.Context, string, string) error         { return nil }
 
-// stubTools refuses any configuration with "bad" in a filter, and counts reloads.
+// stubTools refuses any configuration with "bad" in a filter, counts reloads, and keeps the log
+// the tester was last given.
 type stubTools struct {
 	mu      sync.Mutex
 	reloads int
+	sample  string
 }
 
 func (s *stubTools) Check(_ context.Context, dir string) Result {
@@ -185,7 +187,13 @@ func (s *stubTools) Reload(context.Context, string) Result {
 	s.mu.Unlock()
 	return Result{OK: true, Output: "OK"}
 }
-func (s *stubTools) Regex(context.Context, string, string, string) Result { return Result{OK: true} }
+func (s *stubTools) Regex(_ context.Context, _, log, _ string) Result {
+	b, _ := os.ReadFile(log)
+	s.mu.Lock()
+	s.sample = string(b)
+	s.mu.Unlock()
+	return Result{OK: true}
+}
 
 func server(t *testing.T) (*Server, *stubDaemon, *stubTools, string) {
 	t.Helper()
@@ -463,5 +471,22 @@ func TestARenameOntoAnExistingFileOrOfSettingsIsRefused(t *testing.T) {
 	code, _ = do(t, s, "POST", "/api/files/settings/jail.local/rename", `{"to":"fail2ban.local","version":""}`)
 	if code != http.StatusBadRequest {
 		t.Fatalf("renaming settings answered %d", code)
+	}
+}
+
+func TestPastedLinesEndInANewlineSoTheLastOneCounts(t *testing.T) {
+	s, _, tools, _ := server(t)
+	for text, want := range map[string]string{
+		`one line`:         "one line\n",
+		"two\r\nlines\r\n": "two\nlines\n",
+		"already\n":        "already\n",
+	} {
+		body, _ := json.Marshal(map[string]any{"filter": "sshd", "text": text})
+		if code, out := do(t, s, "POST", "/api/regex", string(body)); code != http.StatusOK {
+			t.Fatalf("%d %v", code, out)
+		}
+		if tools.sample != want {
+			t.Errorf("%q was tried as %q", text, tools.sample)
+		}
 	}
 }

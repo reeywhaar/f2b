@@ -650,7 +650,7 @@ func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
 	case req.Log != "":
 		err = copyTail(req.Log, sample, lines)
 	case req.Text != "":
-		err = os.WriteFile(sample, []byte(req.Text), 0o644)
+		err = os.WriteFile(sample, []byte(pasted(req.Text)), 0o644)
 	default:
 		err = invalid("name a log file, or paste lines to try")
 	}
@@ -665,6 +665,17 @@ func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
 		out["summary"] = RegexSummary{Lines: n(1), Ignored: n(2), Matched: n(3), Missed: n(4)}
 	}
 	reply.JSON(w, http.StatusOK, out)
+}
+
+// pasted is lines as fail2ban-regex will count them: it reads a file as it tails one, and a last
+// line with no newline after it is a line still being written, which it leaves for later. One
+// line pasted on its own is exactly that.
+func pasted(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	if !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return text
 }
 
 // copyTail copies the last n lines of a log, so a tester run over a log of gigabytes reads what

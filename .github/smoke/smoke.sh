@@ -92,6 +92,9 @@ docker exec "$name" test ! -e /data/fail2ban/jail.d/bad.local || fail "a refused
 echo "==> the tester runs fail2ban-regex"
 out=$(api POST /api/regex '{"filter":"app","log":"/logs/app.log"}')
 case "$out" in 200*'"matched":3'*) ;; *) fail "regex: $out" ;; esac
+# One line pasted with no newline after it, which fail2ban-regex alone would leave uncounted.
+out=$(api POST /api/regex '{"filter":"app","text":"{\"msg\":\"password refused\",\"ip\":\"203.0.113.3\"}"}')
+case "$out" in 200*'"lines":1,'*'"matched":1'*) ;; *) fail "pasted line: $out" ;; esac
 
 echo "==> a rename that would leave a jail naming nothing is refused; with the jail, it is one change"
 version=$(api GET /api/files/filters/app.local | sed 's/.*"version":"\([0-9a-f]*\)".*/\1/')
