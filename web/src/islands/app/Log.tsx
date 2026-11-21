@@ -78,11 +78,13 @@ export function Log() {
   return (
     <Frame fill>
       <div className="flex min-h-0 flex-1 flex-col gap-2">
+        {/* On a phone the filter takes a row of its own, the last, against the lines it narrows;
+            the count and Pause keep the row above it. */}
         <div className="flex flex-wrap items-center gap-2">
           <SearchField
             placeholder="Show only lines with…"
             aria-label="Show only lines with this"
-            className="w-full sm:w-72"
+            className="order-last w-full sm:order-none sm:w-72"
             value={filter}
             onChange={setFilter}
           />
