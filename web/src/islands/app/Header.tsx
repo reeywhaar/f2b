@@ -28,7 +28,7 @@ const sections: { label: string; href: string; on: Route["page"][] }[] = [
   { label: "Log", href: paths.log, on: ["log"] },
 ];
 
-/** The bar across the top: the name, the sections, and how fail2ban is doing. */
+/** The bar across the top: the name, and the sections, the log's carrying how fail2ban is doing. */
 export function Header({ route }: { route: Route }) {
   const engine = useQuery({
     queryKey: qk.engine,
@@ -37,6 +37,11 @@ export function Header({ route }: { route: Route }) {
   });
   const [account, setAccount] = useState(false);
   const state = engine.data?.fail2ban;
+  const health = engine.isError
+    ? "The engine is not answering"
+    : state
+      ? stateWords(state)
+      : "Asking the engine…";
 
   return (
     <header className="border-b border-line bg-bg">
@@ -56,26 +61,23 @@ export function Header({ route }: { route: Route }) {
               href={s.href}
               aria-current={s.on.includes(route.page) ? "page" : undefined}
               className={link}
+              title={s.href === paths.log ? health : undefined}
             >
+              {/* The log is where fail2ban's state is explained, so the state is shown on the
+                  way to it rather than as a second way there. */}
+              {s.href === paths.log ? (
+                <>
+                  <StateDot
+                    state={engine.isError ? "unreachable" : state?.state}
+                  />
+                  <span className="sr-only">{health}: </span>
+                </>
+              ) : null}
               {s.label}
             </Link>
           ))}
         </nav>
         <span className="flex-1 sm:hidden" />
-        <Link
-          href={paths.log}
-          className={link}
-          title={state ? stateWords(state) : "Asking the engine…"}
-        >
-          <StateDot state={engine.isError ? "unreachable" : state?.state} />
-          <span className="hidden md:inline">
-            {engine.isError
-              ? "Engine not answering"
-              : state
-                ? `fail2ban ${state.state}`
-                : "…"}
-          </span>
-        </Link>
         <button type="button" className={link} onClick={() => setAccount(true)}>
           Sign out…
         </button>
