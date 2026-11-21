@@ -107,7 +107,7 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
                   key={b.id}
                   className="flex flex-col gap-1 px-2 py-2.5 sm:px-4"
                 >
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                     {/* A column to read down on a wide screen. On a phone, when and for how
                         long make a line of their own under the address, every row alike. */}
                     <span className="order-last w-full text-xs text-muted tabular-nums sm:order-none sm:w-40 sm:shrink-0">

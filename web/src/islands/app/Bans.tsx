@@ -101,7 +101,7 @@ function Row({ ban }: { ban: CurrentBan }) {
     // onto a line of its own.
     <li className="flex items-start gap-3 px-2 py-3 sm:px-4">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
             href={paths.history({ ip: ban.ip })}
             className="font-mono text-sm font-medium hover:underline"
