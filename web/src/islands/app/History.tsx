@@ -60,7 +60,7 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
       <Panel
         title="Bans"
         filter={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <SearchField
               placeholder="An address"
               aria-label="Only the bans of this address"

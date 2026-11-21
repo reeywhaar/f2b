@@ -38,14 +38,14 @@ export function Bans() {
 
   return (
     <Frame>
+      <div className="flex justify-end">
+        <Button variant="solid" onClick={() => setAdding(true)}>
+          Ban an address…
+        </Button>
+      </div>
       <Panel
         title={
           bans.data ? `Banned now · ${bans.data.bans.length}` : "Banned now"
-        }
-        aside={
-          <Button variant="solid" size="bar" onClick={() => setAdding(true)}>
-            Ban an address…
-          </Button>
         }
         // Only once there is a list to narrow.
         filter={
