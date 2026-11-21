@@ -15,11 +15,14 @@ import { Heading } from "@app/components/Heading";
  */
 export function Panel({
   title,
+  aside,
   state,
   dummy,
   children,
 }: {
   title: string;
+  /** A command beside the name, for the section as a whole: there while it loads, or fails. */
+  aside?: ReactNode;
   /** The query this section is waiting on, if it waits on one. */
   state?: {
     isPending: boolean;
@@ -32,7 +35,14 @@ export function Panel({
 }) {
   return (
     <section>
-      <Heading>{title}</Heading>
+      {aside ? (
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <Heading className="">{title}</Heading>
+          {aside}
+        </div>
+      ) : (
+        <Heading>{title}</Heading>
+      )}
       <Boundary what={title} onReset={() => state?.refetch()}>
         {state?.isError ? (
           <div className="flex flex-wrap items-center gap-3">

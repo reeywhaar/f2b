@@ -38,39 +38,43 @@ export function Bans() {
 
   return (
     <Frame>
-      <div className="flex flex-wrap items-center gap-2">
-        <SearchField
-          placeholder="Address or jail"
-          aria-label="Show only bans of an address or a jail"
-          className="w-full sm:w-72"
-          value={filter}
-          onChange={setFilter}
-        />
-        <span className="flex-1" />
-        <Button variant="solid" onClick={() => setAdding(true)}>
-          Ban an address…
-        </Button>
-      </div>
       <Panel
         title={
           bans.data ? `Banned now · ${bans.data.bans.length}` : "Banned now"
         }
+        aside={
+          <Button variant="solid" size="bar" onClick={() => setAdding(true)}>
+            Ban an address…
+          </Button>
+        }
         state={bans}
         dummy={<DummyRows count={6} />}
       >
-        {shown.length === 0 ? (
-          <p className="text-sm text-muted">
-            {filter
-              ? "No ban in force matches that."
-              : "Nobody is banned right now."}
-          </p>
-        ) : (
-          <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg">
-            {shown.map((b) => (
-              <Row key={`${b.jail}/${b.ip}`} ban={b} />
-            ))}
-          </ul>
-        )}
+        <div className="flex flex-col gap-2">
+          {/* The filter against the list it narrows, and only once there is one to narrow. */}
+          {bans.data?.bans.length ? (
+            <SearchField
+              placeholder="Address or jail"
+              aria-label="Show only bans of an address or a jail"
+              className="w-full sm:w-72"
+              value={filter}
+              onChange={setFilter}
+            />
+          ) : null}
+          {shown.length === 0 ? (
+            <p className="text-sm text-muted">
+              {filter
+                ? "No ban in force matches that."
+                : "Nobody is banned right now."}
+            </p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg">
+              {shown.map((b) => (
+                <Row key={`${b.jail}/${b.ip}`} ban={b} />
+              ))}
+            </ul>
+          )}
+        </div>
       </Panel>
       <BanDialog open={adding} onClose={() => setAdding(false)} />
     </Frame>
