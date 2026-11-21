@@ -78,17 +78,12 @@ export function Log() {
   return (
     <Frame fill>
       <div className="flex min-h-0 flex-1 flex-col gap-2">
-        {/* On a phone the filter takes a row of its own, the last, against the lines it narrows;
-            the count and Pause keep the row above it. */}
+        {/* Pause and the count, then the filter across from them; on a phone the filter wraps
+            to a row of its own, the last, against the lines it narrows. */}
         <div className="flex flex-wrap items-center gap-2">
-          <SearchField
-            placeholder="Show only lines with…"
-            aria-label="Show only lines with this"
-            className="order-last w-full sm:order-none sm:w-96 lg:w-xl"
-            value={filter}
-            onChange={setFilter}
-          />
-          <span className="flex-1" />
+          <Button onClick={() => setPaused(!paused)} aria-pressed={paused}>
+            {paused ? "Follow" : "Pause"}
+          </Button>
           {read ? (
             <span className="text-xs text-muted tabular-nums">
               {filter
@@ -96,9 +91,14 @@ export function Log() {
                 : `${lines.length} lines`}
             </span>
           ) : null}
-          <Button onClick={() => setPaused(!paused)} aria-pressed={paused}>
-            {paused ? "Follow" : "Pause"}
-          </Button>
+          <span className="flex-1" />
+          <SearchField
+            placeholder="Show only lines with…"
+            aria-label="Show only lines with this"
+            className="w-full sm:w-96 lg:w-xl"
+            value={filter}
+            onChange={setFilter}
+          />
         </div>
         {error ? <p className="text-sm text-accent">{error}</p> : null}
         <div
