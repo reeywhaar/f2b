@@ -6,6 +6,7 @@ import { messageOf } from "@app/api/transport";
 import { Button } from "@app/components/Button";
 import { DummyRows } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
+import { ChevronRightIcon } from "@app/components/icons/Icon";
 import { CodeEditor } from "@app/editor/CodeEditor";
 import { Link } from "@app/islands/app/Link";
 import { go, paths } from "@app/islands/app/route";
@@ -27,7 +28,7 @@ export function Stock({ path }: { path: string }) {
         <Link href={paths.config} className="text-sm text-muted hover:text-fg">
           Config
         </Link>
-        <span className="text-faint">/</span>
+        <ChevronRightIcon className="shrink-0 text-faint" />
         <h1 className="font-mono text-base font-semibold">{path}</h1>
         <span className="rounded bg-fill px-1.5 py-0.5 text-xs text-muted">
           fail2ban&rsquo;s own, read-only

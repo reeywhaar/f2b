@@ -268,72 +268,114 @@ function Jails({
     );
   }
   return (
-    <div className="scroll-thin overflow-x-auto">
-      <table className="w-full text-left text-sm tabular-nums">
-        <thead className="text-xs text-muted">
-          <tr>
-            <th className="py-1.5 pr-4 font-medium">Jail</th>
-            <th className="py-1.5 pr-4 text-right font-medium">Banned</th>
-            <th className="py-1.5 pr-4 text-right font-medium">Failing</th>
-            <th className="py-1.5 pr-4 font-medium whitespace-nowrap">
-              Bans after
-            </th>
-            <th className="py-1.5 pr-4 font-medium">For</th>
-            <th className="py-1.5 font-medium">Reads</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jails.map((j) => (
-            <tr key={j.name} className="border-t border-line align-top">
-              <td className="py-2 pr-4">
-                <span className="flex items-center gap-2 font-medium">
-                  <span
-                    aria-hidden="true"
-                    className="size-2.5 shrink-0 rounded-sm"
-                    style={{ background: colors.get(j.name) }}
-                  />
-                  {j.file ? (
-                    <Link
-                      href={paths.file(j.file.kind, j.file.name)}
-                      className="hover:underline"
-                    >
-                      {j.name}
-                    </Link>
-                  ) : (
-                    j.name
-                  )}
-                </span>
-              </td>
-              <td className="py-2 pr-4 text-right">
-                <span title="Now">{count(j.bannedNow)}</span>
-                <span className="text-faint" title="Since fail2ban started">
+    <>
+      {/* A card a jail on a phone: six columns do not fit, and a log's path squeezed into the
+          last of them broke a letter a line. */}
+      <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg sm:hidden">
+        {jails.map((j) => (
+          <li key={j.name} className="flex flex-col gap-1 px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2.5 shrink-0 rounded-sm"
+                style={{ background: colors.get(j.name) }}
+              />
+              {j.file ? (
+                <Link
+                  href={paths.file(j.file.kind, j.file.name)}
+                  className="font-medium hover:underline"
+                >
+                  {j.name}
+                </Link>
+              ) : (
+                <span className="font-medium">{j.name}</span>
+              )}
+              <span className="flex-1" />
+              <span className="text-sm tabular-nums">
+                {count(j.bannedNow)}
+                <span className="text-faint">
                   {" "}
-                  / {count(j.bannedTotal)}
+                  / {count(j.bannedTotal)} banned
                 </span>
-              </td>
-              <td className="py-2 pr-4 text-right">
-                <span title="Now">{count(j.failedNow)}</span>
-                <span className="text-faint" title="Since fail2ban started">
-                  {" "}
-                  / {count(j.failedTotal)}
-                </span>
-              </td>
-              <td className="py-2 pr-4 whitespace-nowrap text-muted">
-                {j.maxRetry} in {span(j.findTime)}
-              </td>
-              <td className="py-2 pr-4 whitespace-nowrap text-muted">
-                {span(j.banTime)}
-              </td>
-              <td className="py-2 font-mono text-xs break-all text-muted">
-                {j.logs.join(" ")}
-              </td>
+              </span>
+            </div>
+            <p className="text-xs text-muted tabular-nums">
+              {count(j.failedNow)} / {count(j.failedTotal)} failing · bans after{" "}
+              {j.maxRetry} in {span(j.findTime)}, for {span(j.banTime)}
+            </p>
+            <p className="font-mono text-[11px] break-all text-muted">
+              {j.logs.join(" ")}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <div className="scroll-thin hidden overflow-x-auto sm:block">
+        <table className="w-full text-left text-sm tabular-nums">
+          <thead className="text-xs text-muted">
+            <tr>
+              <th className="py-1.5 pr-4 font-medium">Jail</th>
+              <th className="py-1.5 pr-4 text-right font-medium">Banned</th>
+              <th className="py-1.5 pr-4 text-right font-medium">Failing</th>
+              <th className="py-1.5 pr-4 font-medium whitespace-nowrap">
+                Bans after
+              </th>
+              <th className="py-1.5 pr-4 font-medium">For</th>
+              <th className="py-1.5 font-medium">Reads</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {jails.map((j) => (
+              <tr key={j.name} className="border-t border-line align-top">
+                <td className="py-2 pr-4">
+                  <span className="flex items-center gap-2 font-medium">
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 shrink-0 rounded-sm"
+                      style={{ background: colors.get(j.name) }}
+                    />
+                    {j.file ? (
+                      <Link
+                        href={paths.file(j.file.kind, j.file.name)}
+                        className="hover:underline"
+                      >
+                        {j.name}
+                      </Link>
+                    ) : (
+                      j.name
+                    )}
+                  </span>
+                </td>
+                <td className="py-2 pr-4 text-right">
+                  <span title="Now">{count(j.bannedNow)}</span>
+                  <span className="text-faint" title="Since fail2ban started">
+                    {" "}
+                    / {count(j.bannedTotal)}
+                  </span>
+                </td>
+                <td className="py-2 pr-4 text-right">
+                  <span title="Now">{count(j.failedNow)}</span>
+                  <span className="text-faint" title="Since fail2ban started">
+                    {" "}
+                    / {count(j.failedTotal)}
+                  </span>
+                </td>
+                <td className="py-2 pr-4 whitespace-nowrap text-muted">
+                  {j.maxRetry} in {span(j.findTime)}
+                </td>
+                <td className="py-2 pr-4 whitespace-nowrap text-muted">
+                  {span(j.banTime)}
+                </td>
+                <td className="py-2 font-mono text-xs break-all text-muted">
+                  {j.logs.join(" ")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p className="mt-2 text-xs text-faint">
         Banned and failing: now / since fail2ban started.
       </p>
-    </div>
+    </>
   );
 }

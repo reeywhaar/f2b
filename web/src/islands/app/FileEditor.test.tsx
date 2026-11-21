@@ -151,7 +151,8 @@ describe("saving a file", () => {
     });
     mount(<FileEditor kind="filters" name="app.local" fresh={false} />);
     await screen.findByLabelText("app.local, editable");
-    fireEvent.click(screen.getByRole("button", { name: "Rename…" }));
+    fireEvent.click(screen.getByRole("button", { name: "More for this file" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename…" }));
     const field = await screen.findByDisplayValue("app.local");
     fireEvent.change(field, { target: { value: "right" } });
     expect(await screen.findByText("jail.d/app-jail.local")).toBeTruthy();
@@ -177,7 +178,8 @@ describe("saving a file", () => {
     fireEvent.change(editor, {
       target: { value: "[Definition]\nfailregex = <ADDR>\n" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Duplicate…" }));
+    fireEvent.click(screen.getByRole("button", { name: "More for this file" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate…" }));
     const field = await screen.findByDisplayValue("app-copy");
     fireEvent.change(field, { target: { value: "app-2" } });
     fireEvent.click(screen.getByRole("button", { name: "Open the copy" }));

@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { getHistory, getJails, getStats } from "@app/api/actions";
 import { qk } from "@app/api/keys";
+import type { Ban } from "@app/api/types";
 import { Button } from "@app/components/Button";
 import { DummyRows } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
@@ -97,8 +98,11 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
               {bans.map((b) => (
                 <li key={b.id} className="flex flex-col gap-1 px-4 py-2.5">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <span className="w-40 shrink-0 text-xs text-muted tabular-nums">
+                    {/* A column to read down on a wide screen. On a phone, when and for how
+                        long make a line of their own under the address, every row alike. */}
+                    <span className="order-last w-full text-xs text-muted tabular-nums sm:order-none sm:w-40 sm:shrink-0">
                       {dateTime(b.at)}
+                      <span className="sm:hidden"> · {lasted(b)}</span>
                     </span>
                     <button
                       type="button"
@@ -119,9 +123,8 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
                       {b.jail}
                     </button>
                     <span className="flex-1" />
-                    <span className="text-xs text-muted tabular-nums">
-                      {b.duration < 0 ? "for good" : `for ${span(b.duration)}`}
-                      {b.count > 1 ? ` · ban ${b.count} here` : ""}
+                    <span className="hidden text-xs text-muted tabular-nums sm:inline">
+                      {lasted(b)}
                     </span>
                   </div>
                   {b.matches.length > 0 ? (
@@ -152,4 +155,10 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
       </Panel>
     </Frame>
   );
+}
+
+/** How long a ban was for, and which of this address's bans in this jail it was. */
+function lasted(b: Ban): string {
+  const length = b.duration < 0 ? "for good" : `for ${span(b.duration)}`;
+  return b.count > 1 ? `${length} · ban ${b.count} here` : length;
 }

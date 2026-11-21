@@ -15,6 +15,8 @@ import { Button } from "@app/components/Button";
 import { useConfirm } from "@app/components/Confirm";
 import { DummyRows } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
+import { Menu } from "@app/components/Menu";
+import { ChevronRightIcon } from "@app/components/icons/Icon";
 import { CodeEditor } from "@app/editor/CodeEditor";
 import { ago } from "@app/format";
 import { Link } from "@app/islands/app/Link";
@@ -225,7 +227,7 @@ export function FileEditor({
         <Link href={paths.config} className="text-sm text-muted hover:text-fg">
           Config
         </Link>
-        <span className="text-faint">/</span>
+        <ChevronRightIcon className="shrink-0 text-faint" />
         <h1 className="font-mono text-base font-semibold">
           <span className="text-muted">{dirs[kind]}</span>
           {name}
@@ -240,73 +242,78 @@ export function FileEditor({
           </span>
         ) : null}
         <span className="flex-1" />
-        {!fresh && file.data ? (
-          <Button
-            size="bar"
-            variant="danger"
-            disabled={busy}
-            onClick={async () => {
-              if (
-                await confirm({
-                  title: `Delete ${name}`,
-                  message:
-                    kind === "jails"
-                      ? "The file goes, and fail2ban reloads without it: its jails stop, and their bans are lifted. fail2ban's database keeps their history."
-                      : "The file goes, if fail2ban would still start without it, and fail2ban reloads.",
-                  confirm: "Delete",
+        {/* What is done with the change has the row; what is done to the file, now and then,
+            is behind the menu beside it. One row at any width. */}
+        <div className="ml-auto flex items-center gap-2">
+          {!fresh && file.data ? (
+            <Menu
+              label="More for this file"
+              items={[
+                ...(kind !== "settings"
+                  ? [
+                      {
+                        label: "Rename…",
+                        disabled: busy || dirty,
+                        title: dirty
+                          ? "Save or discard the changes first"
+                          : undefined,
+                        onSelect: () => setRenaming(true),
+                      },
+                      {
+                        label: "Duplicate…",
+                        disabled: busy,
+                        onSelect: () => setDuplicating(true),
+                      },
+                    ]
+                  : []),
+                {
+                  label: "Delete…",
                   danger: true,
-                })
-              ) {
-                remove.mutate();
-              }
-            }}
-          >
-            Delete…
-          </Button>
-        ) : null}
-        {!fresh && file.data && kind !== "settings" ? (
+                  disabled: busy,
+                  onSelect: async () => {
+                    if (
+                      await confirm({
+                        title: `Delete ${name}`,
+                        message:
+                          kind === "jails"
+                            ? "The file goes, and fail2ban reloads without it: its jails stop, and their bans are lifted. fail2ban's database keeps their history."
+                            : "The file goes, if fail2ban would still start without it, and fail2ban reloads.",
+                        confirm: "Delete",
+                        danger: true,
+                      })
+                    ) {
+                      remove.mutate();
+                    }
+                  },
+                },
+              ]}
+            />
+          ) : null}
+          {dirty && !fresh ? (
+            <Button
+              size="bar"
+              disabled={busy}
+              onClick={() => base && setDraft(base.content)}
+            >
+              Discard
+            </Button>
+          ) : null}
           <Button
             size="bar"
-            disabled={busy || dirty}
-            title={dirty ? "Save or discard the changes first" : undefined}
-            onClick={() => setRenaming(true)}
+            disabled={busy || loading}
+            onClick={() => check.mutate()}
           >
-            Rename…
+            {check.isPending ? "Checking…" : "Check"}
           </Button>
-        ) : null}
-        {!fresh && file.data && kind !== "settings" ? (
           <Button
             size="bar"
-            disabled={busy}
-            onClick={() => setDuplicating(true)}
+            variant="solid"
+            disabled={busy || loading || !dirty}
+            onClick={() => save.mutate()}
           >
-            Duplicate…
+            {save.isPending ? "Saving…" : "Save"}
           </Button>
-        ) : null}
-        {dirty && !fresh ? (
-          <Button
-            size="bar"
-            disabled={busy}
-            onClick={() => base && setDraft(base.content)}
-          >
-            Discard
-          </Button>
-        ) : null}
-        <Button
-          size="bar"
-          disabled={busy || loading}
-          onClick={() => check.mutate()}
-        >
-          {check.isPending ? "Checking…" : "Check"}
-        </Button>
-        <Button
-          size="bar"
-          variant="solid"
-          disabled={busy || loading || !dirty}
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
+        </div>
       </div>
 
       {file.isError ? (

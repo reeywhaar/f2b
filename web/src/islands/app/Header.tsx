@@ -49,7 +49,8 @@ export function Header({ route }: { route: Route }) {
   return (
     <header className="border-b border-line bg-bg">
       {/* On a phone the sections take a row of their own under the name, rather than
-          scrolling out of sight beside it. */}
+          scrolling out of sight beside it, pulled left by a link's padding so the first word
+          lines up with the name above it. */}
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1.5 sm:flex-nowrap sm:px-4">
         <Link
           href={paths.overview()}
@@ -57,7 +58,7 @@ export function Header({ route }: { route: Route }) {
         >
           <Wordmark />
         </Link>
-        <nav className="scroll-thin order-last flex w-full min-w-0 gap-0.5 overflow-x-auto sm:order-none sm:w-auto sm:flex-1">
+        <nav className="scroll-thin order-last -ml-2 flex w-[calc(100%+0.5rem)] min-w-0 gap-0.5 overflow-x-auto sm:order-none sm:ml-0 sm:w-auto sm:flex-1">
           {sections.map((s) => (
             <Link
               key={s.label}

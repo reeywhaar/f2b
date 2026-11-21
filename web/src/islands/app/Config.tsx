@@ -109,18 +109,13 @@ export function Config() {
             );
             return (
               <li key={s.name}>
-                <Link
+                <FileRow
                   href={paths.file("settings", s.name, !f)}
-                  className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-4 py-2.5 hover:bg-fill"
-                >
-                  <span className="font-mono text-sm">{s.name}</span>
-                  <span className="flex-1 text-xs text-muted">{s.about}</span>
-                  <span className="text-xs text-faint">
-                    {f
-                      ? `${size(f.size)}, changed ${ago(f.modified)}`
-                      : "not made: create"}
-                  </span>
-                </Link>
+                  name={s.name}
+                  about={s.about}
+                  size={f?.size}
+                  modified={f?.modified}
+                />
               </li>
             );
           })}
@@ -174,25 +169,68 @@ function Files({
     <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg">
       {files.map((f) => (
         <li key={f.name}>
-          <Link
+          <FileRow
             href={paths.file(kind, f.name)}
-            className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 px-4 py-2.5 hover:bg-fill"
-          >
-            <span className="font-mono text-sm">{f.name}</span>
-            {kind === "jails" && f.sections.length > 0 ? (
-              <span className="text-xs text-muted">
-                {f.sections.length === 1 ? "jail" : "jails"}{" "}
-                {f.sections.join(", ")}
-              </span>
-            ) : null}
-            <span className="flex-1" />
-            <span className="text-xs text-faint">
-              {size(f.size)}, changed {ago(f.modified)}
-            </span>
-          </Link>
+            name={f.name}
+            about={
+              kind === "jails" && f.sections.length > 0
+                ? `${f.sections.length === 1 ? "jail" : "jails"} ${f.sections.join(", ")}`
+                : ""
+            }
+            size={f.size}
+            modified={f.modified}
+          />
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * One file in a list: its name, what it is, and how big and how old. One line where there is
+ * room; on a phone the name and its age on top, and what it is under them at the full width,
+ * rather than squeezed into a column between the two.
+ */
+function FileRow({
+  href,
+  name,
+  about,
+  size: bytes,
+  modified,
+}: {
+  href: string;
+  name: string;
+  about: string;
+  /** Neither, for a settings file not made yet. */
+  size?: number;
+  modified?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-0.5 px-4 py-2.5 hover:bg-fill sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+    >
+      <span className="col-start-1 row-start-1 truncate font-mono text-sm">
+        {name}
+      </span>
+      {about ? (
+        <span className="col-span-2 row-start-2 text-xs text-muted sm:col-span-1 sm:col-start-2 sm:row-start-1">
+          {about}
+        </span>
+      ) : null}
+      <span className="col-start-2 row-start-1 text-xs whitespace-nowrap text-faint sm:col-start-3">
+        {modified === undefined ? (
+          "not made: create"
+        ) : (
+          <>
+            <span className="hidden sm:inline">
+              {size(bytes ?? 0)}, changed{" "}
+            </span>
+            {ago(modified)}
+          </>
+        )}
+      </span>
+    </Link>
   );
 }
 

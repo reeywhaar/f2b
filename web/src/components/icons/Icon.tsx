@@ -130,6 +130,20 @@ export const DropperIcon = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+export const DotsIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <circle cx="5.5" cy="12" r="1" />
+    <circle cx="12" cy="12" r="1" />
+    <circle cx="18.5" cy="12" r="1" />
+  </Icon>
+);
+
+export const ChevronRightIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M9.5 6 15.5 12 9.5 18" />
+  </Icon>
+);
+
 export const ChevronDownIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <path d="M6 9.5 12 15.5 18 9.5" />

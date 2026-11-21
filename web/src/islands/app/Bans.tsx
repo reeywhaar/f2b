@@ -92,77 +92,89 @@ function Row({ ban }: { ban: CurrentBan }) {
   });
 
   return (
-    <li className="flex flex-col gap-1 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <Link
-          href={paths.history({ ip: ban.ip })}
-          className="font-mono text-sm font-medium hover:underline"
-        >
-          {ban.ip}
-        </Link>
-        <span className="rounded bg-fill px-1.5 py-0.5 text-xs">
-          {ban.jail}
-        </span>
-        {ban.count > 1 ? (
-          <span className="text-xs text-warn">
-            {ordinal(ban.count)} ban here
+    // Unban in a column of its own, so a long address wraps beside it rather than pushing it
+    // onto a line of its own.
+    <li className="flex items-start gap-3 px-4 py-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <Link
+            href={paths.history({ ip: ban.ip })}
+            className="font-mono text-sm font-medium hover:underline"
+          >
+            {ban.ip}
+          </Link>
+          <span className="rounded bg-fill px-1.5 py-0.5 text-xs">
+            {ban.jail}
           </span>
+          {ban.count > 1 ? (
+            <span className="hidden text-xs text-warn sm:inline">
+              {ordinal(ban.count)} ban here
+            </span>
+          ) : null}
+          <span className="flex-1" />
+          {/* On a phone, a line of its own under the address, so Unban stays beside what it
+              unbans. */}
+          <span className="order-last w-full text-xs text-muted tabular-nums sm:order-none sm:w-auto sm:whitespace-nowrap">
+            {ban.count > 1 ? (
+              <span className="text-warn sm:hidden">
+                {ordinal(ban.count)} ban here ·{" "}
+              </span>
+            ) : null}
+            {ban.at ? (
+              <span title={dateTime(ban.at)}>banned {ago(ban.at)}</span>
+            ) : (
+              "when is not recorded"
+            )}
+            {ban.duration < 0
+              ? ", for good"
+              : ban.until
+                ? `, lifted ${until(ban.until)}`
+                : ban.duration
+                  ? `, for ${span(ban.duration)}`
+                  : ""}
+          </span>
+        </div>
+        {ban.matches.length > 0 ? (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted select-none hover:text-fg">
+              {ban.failures || ban.matches.length}{" "}
+              {ban.failures === 1 ? "failure" : "failures"}: the lines
+            </summary>
+            <pre className="scroll-thin mt-1 overflow-x-auto rounded-md bg-(--color-code-bg) p-2 font-mono text-[11px] leading-relaxed text-muted">
+              {ban.matches.join("\n")}
+            </pre>
+          </details>
         ) : null}
-        <span className="flex-1" />
-        <span className="text-xs whitespace-nowrap text-muted tabular-nums">
-          {ban.at ? (
-            <span title={dateTime(ban.at)}>banned {ago(ban.at)}</span>
-          ) : (
-            "when is not recorded"
-          )}
-          {ban.duration < 0
-            ? ", for good"
-            : ban.until
-              ? `, lifted ${until(ban.until)}`
-              : ban.duration
-                ? `, for ${span(ban.duration)}`
-                : ""}
-        </span>
-        <Button
-          size="bar"
-          variant="danger"
-          disabled={unban.isPending}
-          onClick={async () => {
-            setError("");
-            if (
-              await confirm({
-                title: `Unban ${ban.ip}`,
-                message: (
-                  <>
-                    {ban.ip} is let back past the {ban.jail} jail at once.
-                    fail2ban also forgets its earlier bans of this address in
-                    this jail, so they leave the history: that is fail2ban's own
-                    doing, not f2b's.
-                  </>
-                ),
-                confirm: "Unban",
-                danger: true,
-              })
-            ) {
-              unban.mutate();
-            }
-          }}
-        >
-          Unban…
-        </Button>
+        {error ? <p className="text-xs text-accent">{error}</p> : null}
       </div>
-      {ban.matches.length > 0 ? (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-muted select-none hover:text-fg">
-            {ban.failures || ban.matches.length}{" "}
-            {ban.failures === 1 ? "failure" : "failures"}: the lines
-          </summary>
-          <pre className="scroll-thin mt-1 overflow-x-auto rounded-md bg-(--color-code-bg) p-2 font-mono text-[11px] leading-relaxed text-muted">
-            {ban.matches.join("\n")}
-          </pre>
-        </details>
-      ) : null}
-      {error ? <p className="text-xs text-accent">{error}</p> : null}
+      <Button
+        size="bar"
+        className="shrink-0"
+        variant="danger"
+        disabled={unban.isPending}
+        onClick={async () => {
+          setError("");
+          if (
+            await confirm({
+              title: `Unban ${ban.ip}`,
+              message: (
+                <>
+                  {ban.ip} is let back past the {ban.jail} jail at once.
+                  fail2ban also forgets its earlier bans of this address in this
+                  jail, so they leave the history: that is fail2ban's own doing,
+                  not f2b's.
+                </>
+              ),
+              confirm: "Unban",
+              danger: true,
+            })
+          ) {
+            unban.mutate();
+          }
+        }}
+      >
+        Unban…
+      </Button>
     </li>
   );
 }

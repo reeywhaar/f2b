@@ -99,6 +99,12 @@
   outline-offset: 2px;
 }
 
+/* Text at the size it was set at, on a phone turned sideways too. Tailwind sets the prefixed
+   one; Chrome on Android reads this. */
+html {
+  text-size-adjust: 100%;
+}
+
 /* Without this a light page renders a dark-mode select, and the first paint flashes. */
 :root {
   color-scheme: light dark;
