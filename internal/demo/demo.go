@@ -88,7 +88,7 @@ func New(ctx context.Context, l app.Layout, log *slog.Logger) (http.Handler, err
 		Database: l.Database,
 	}
 	live := filepath.Join(run, "etc")
-	if err := composer.Compose(live, nil); err != nil {
+	if err := composer.Compose(live); err != nil {
 		return nil, err
 	}
 	js := jails(logs)

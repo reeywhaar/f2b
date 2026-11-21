@@ -68,7 +68,8 @@ export type File = {
 
 export type Result = { ok: boolean; output: string };
 
-export type Applied = { file: File | null; reload: Result };
+/** What a save, a delete or a rename did: the file, the others changed with it, the reload. */
+export type Applied = { file: File | null; also: FileRef[]; reload: Result };
 
 export type Stock = { filters: string[]; actions: string[]; other: string[] };
 

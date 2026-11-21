@@ -63,6 +63,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/files/{kind}/{name}", s.getFile)
 	m.HandleFunc("PUT /api/files/{kind}/{name}", s.putFile)
 	m.HandleFunc("DELETE /api/files/{kind}/{name}", s.deleteFile)
+	m.HandleFunc("GET /api/files/{kind}/{name}/references", s.references)
+	m.HandleFunc("POST /api/files/{kind}/{name}/rename", s.rename)
 	m.HandleFunc("POST /api/check", s.check)
 	m.HandleFunc("GET /api/stock", s.stockList)
 	m.HandleFunc("GET /api/stock/{path...}", s.stockFile)
@@ -80,7 +82,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) PrepareLive() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Composer.Compose(s.Live, nil)
+	return s.Composer.Compose(s.Live)
 }
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
@@ -279,10 +281,12 @@ func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
 	reply.JSON(w, http.StatusOK, map[string]any{"file": f, "content": content})
 }
 
-// Applied is what a save or a delete did: the file as it now is, and what the reload said.
+// Applied is what a save, a delete or a rename did: the file as it now is, the other files it
+// changed with it, and what the reload said.
 type Applied struct {
-	File   *File  `json:"file"`
-	Reload Result `json:"reload"`
+	File   *File     `json:"file"`
+	Also   []FileRef `json:"also"`
+	Reload Result    `json:"reload"`
 }
 
 func (s *Server) putFile(w http.ResponseWriter, r *http.Request) {
@@ -325,6 +329,110 @@ func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request) {
 	reply.JSON(w, http.StatusOK, out)
 }
 
+// referencesTo is every jail file, jail.local among them, that names this filter or action, and
+// how it would read with the name changed.
+func (s *Server) referencesTo(k Kind, name, to string) ([]planned, error) {
+	keys := refKeys[k]
+	if keys == nil {
+		return nil, nil
+	}
+	files, err := s.Files.List()
+	if err != nil {
+		return nil, err
+	}
+	var out []planned
+	for _, f := range files {
+		if f.Kind != Jails && !(f.Kind == Settings && f.Name == "jail.local") {
+			continue
+		}
+		_, content, err := s.Files.Read(f.Kind, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if Mentions(content, keys, bare(name)) == 0 {
+			continue
+		}
+		rewritten := Rewrite(content, keys, bare(name), bare(to))
+		out = append(out, planned{Change{Kind: f.Kind, Name: f.Name, Content: &rewritten}, f.Version})
+	}
+	return out, nil
+}
+
+func (s *Server) references(w http.ResponseWriter, r *http.Request) {
+	k, name, err := s.target(r)
+	if err == nil {
+		_, _, err = s.Files.Read(k, name)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	refs, err := s.referencesTo(k, name, name)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	out := []FileRef{}
+	for _, p := range refs {
+		out = append(out, FileRef{Kind: p.Kind, Name: p.Name})
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"files": out})
+}
+
+// rename moves a file to a new name, and with references, changes the jails that name it to name
+// the new one: all checked as one change, so fail2ban never sees a jail naming what is gone.
+func (s *Server) rename(w http.ResponseWriter, r *http.Request) {
+	k, name, err := s.target(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var req struct {
+		To         string `json:"to"`
+		Version    string `json:"version"`
+		References bool   `json:"references"`
+	}
+	if !reply.Decode(w, r, &req) {
+		return
+	}
+	switch {
+	case k == Settings:
+		err = invalid("settings files are read by their names, and keep them")
+	case req.To == name:
+		err = invalid("that is the name it has")
+	default:
+		err = CheckName(k, req.To)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	_, content, err := s.Files.Read(k, name)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	plan := []planned{
+		{Change{Kind: k, Name: req.To, Content: &content}, ""},
+		{Change{Kind: k, Name: name}, req.Version},
+	}
+	if req.References {
+		refs, err := s.referencesTo(k, name, req.To)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		plan = append(plan, refs...)
+	}
+	out, err := s.applyAll(r.Context(), plan)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.Log.Info("file renamed", "kind", k, "from", name, "to", req.To, "references", len(out.Also))
+	reply.JSON(w, http.StatusOK, out)
+}
+
 // rejected is fail2ban refusing a configuration, in its own words.
 type rejected struct{ output string }
 
@@ -333,23 +441,40 @@ func (e *rejected) Error() string { return "fail2ban refused this configuration"
 // Apply checks a change against everything else, and only then writes it and reloads fail2ban.
 // A refused change leaves the disk as it was.
 func (s *Server) Apply(ctx context.Context, c Change, version string) (Applied, error) {
+	return s.applyAll(ctx, []planned{{c, version}})
+}
+
+// planned is one change, and the version of the file it was made against: "" for a file that
+// is not there yet.
+type planned struct {
+	Change
+	Version string
+}
+
+// applyAll checks every change together, writes them, and reloads once: a rename, and the jails
+// it names, are one change to fail2ban.
+func (s *Server) applyAll(ctx context.Context, plan []planned) (Applied, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	current, err := s.Files.Current(c.Kind, c.Name)
-	if err != nil {
-		return Applied{}, err
-	}
-	switch {
-	case c.Content == nil && current == "":
-		return Applied{}, fmt.Errorf("%w: there is no %s %s", ErrNotFound, singular(c.Kind), c.Name)
-	case version == "" && current != "":
-		return Applied{}, fmt.Errorf("%w: there is already a %s %s", ErrConflict, singular(c.Kind), c.Name)
-	case version != current:
-		return Applied{}, fmt.Errorf("%w: that file changed since it was opened; open %s again to see how", ErrConflict, c.Name)
+	changes := make([]Change, len(plan))
+	for i, p := range plan {
+		current, err := s.Files.Current(p.Kind, p.Name)
+		if err != nil {
+			return Applied{}, err
+		}
+		switch {
+		case p.Content == nil && current == "":
+			return Applied{}, fmt.Errorf("%w: there is no %s %s", ErrNotFound, singular(p.Kind), p.Name)
+		case p.Version == "" && current != "":
+			return Applied{}, fmt.Errorf("%w: there is already a %s %s", ErrConflict, singular(p.Kind), p.Name)
+		case p.Version != current:
+			return Applied{}, fmt.Errorf("%w: that file changed since it was opened; open %s again to see how", ErrConflict, p.Name)
+		}
+		changes[i] = p.Change
 	}
 
-	if err := s.Composer.Compose(s.Scratch, &c); err != nil {
+	if err := s.Composer.Compose(s.Scratch, changes...); err != nil {
 		return Applied{}, err
 	}
 	defer os.RemoveAll(s.Scratch)
@@ -357,13 +482,13 @@ func (s *Server) Apply(ctx context.Context, c Change, version string) (Applied, 
 		return Applied{}, &rejected{output: res.Output}
 	}
 
-	var out Applied
-	if c.Content == nil {
-		if err := s.Files.Delete(c.Kind, c.Name); err != nil {
-			return Applied{}, err
+	// What is written goes before what is deleted, so a rename never leaves the name gone and
+	// nothing in its place.
+	out := Applied{Also: []FileRef{}}
+	for _, c := range changes {
+		if c.Content == nil {
+			continue
 		}
-		s.Log.Info("file deleted", "kind", c.Kind, "name", c.Name)
-	} else {
 		if err := s.Files.Write(c.Kind, c.Name, *c.Content); err != nil {
 			return Applied{}, err
 		}
@@ -371,11 +496,25 @@ func (s *Server) Apply(ctx context.Context, c Change, version string) (Applied, 
 		if err != nil {
 			return Applied{}, err
 		}
-		out.File = &f
+		if out.File == nil {
+			out.File = &f
+		} else {
+			out.Also = append(out.Also, FileRef{Kind: f.Kind, Name: f.Name})
+		}
 		s.Log.Info("file saved", "kind", c.Kind, "name", c.Name, "version", f.Version)
 	}
+	for _, c := range changes {
+		if c.Content != nil {
+			continue
+		}
+		if err := s.Files.Delete(c.Kind, c.Name); err != nil {
+			return Applied{}, err
+		}
+		s.Log.Info("file deleted", "kind", c.Kind, "name", c.Name)
+	}
+	what := changes[0].Name
 
-	if err := s.Composer.Compose(s.Live, nil); err != nil {
+	if err := s.Composer.Compose(s.Live); err != nil {
 		return out, err
 	}
 	if s.Daemon.State().State != Running {
@@ -386,10 +525,10 @@ func (s *Server) Apply(ctx context.Context, c Change, version string) (Applied, 
 	}
 	out.Reload = s.Tools.Reload(ctx, s.Live)
 	if out.Reload.OK {
-		s.Lines.Note("NOTICE", "configuration reloaded after a change to "+c.Name)
+		s.Lines.Note("NOTICE", "configuration reloaded after a change to "+what)
 	} else {
-		s.Lines.Note("ERROR", "the reload after a change to "+c.Name+" failed")
-		s.Log.Warn("reload failed", "name", c.Name)
+		s.Lines.Note("ERROR", "the reload after a change to "+what+" failed")
+		s.Log.Warn("reload failed", "name", what)
 	}
 	return out, nil
 }
@@ -417,7 +556,7 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(dir)
-	if err := s.Composer.Compose(dir, &Change{Kind: k, Name: req.Name, Content: req.Content}); err != nil {
+	if err := s.Composer.Compose(dir, Change{Kind: k, Name: req.Name, Content: req.Content}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -480,13 +619,13 @@ func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, invalid("%q is not a filter's name, which is letters, digits, dots, dashes and underscores, and options in brackets", req.Filter))
 		return
 	}
-	var change *Change
+	var changes []Change
 	if req.Content != nil {
 		if err := CheckName(Filters, req.File); err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		change = &Change{Kind: Filters, Name: req.File, Content: req.Content}
+		changes = append(changes, Change{Kind: Filters, Name: req.File, Content: req.Content})
 	}
 	lines := req.Lines
 	if lines <= 0 {
@@ -500,7 +639,7 @@ func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer os.RemoveAll(dir)
-	if err := s.Composer.Compose(filepath.Join(dir, "etc"), change); err != nil {
+	if err := s.Composer.Compose(filepath.Join(dir, "etc"), changes...); err != nil {
 		s.fail(w, r, err)
 		return
 	}

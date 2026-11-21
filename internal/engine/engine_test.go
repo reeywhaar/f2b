@@ -55,7 +55,7 @@ func composer(t *testing.T) (*Composer, string) {
 func TestComposeLeavesOutTheJailsThePackageEnables(t *testing.T) {
 	c, root := composer(t)
 	dst := filepath.Join(root, "etc")
-	if err := c.Compose(dst, nil); err != nil {
+	if err := c.Compose(dst); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dst, "jail.d", "alpine-ssh.conf")); !errors.Is(err, os.ErrNotExist) {
@@ -75,7 +75,7 @@ func TestComposeLaysEditedFilesAndAChangeOverThePackage(t *testing.T) {
 	write(t, filepath.Join(root, "user", "filter.d", "notes.txt"), "x")
 	dst := filepath.Join(root, "etc")
 	content := "new"
-	if err := c.Compose(dst, &Change{Kind: Filters, Name: "app.local", Content: &content}); err != nil {
+	if err := c.Compose(dst, Change{Kind: Filters, Name: "app.local", Content: &content}); err != nil {
 		t.Fatal(err)
 	}
 	if read(t, filepath.Join(dst, "jail.d", "sshd.local")) != "[sshd]\nenabled = true\n" {
@@ -98,7 +98,7 @@ func TestComposeLaysEditedFilesAndAChangeOverThePackage(t *testing.T) {
 func TestComposeWritesWhatTheEngineDependsOnLast(t *testing.T) {
 	c, root := composer(t)
 	dst := filepath.Join(root, "etc")
-	if err := c.Compose(dst, nil); err != nil {
+	if err := c.Compose(dst); err != nil {
 		t.Fatal(err)
 	}
 	entries, _ := os.ReadDir(filepath.Join(dst, "fail2ban.d"))
@@ -382,5 +382,86 @@ func TestAJailsFilterIsTheOneItNamesOrItsOwnName(t *testing.T) {
 	}
 	if got := FilterOf("[x]\nfilter = %(__name__)s\n", "x"); got != "x" {
 		t.Errorf("an interpolated filter is %q", got)
+	}
+}
+
+func TestRewritingChangesOnlyWhereAJailNamesIt(t *testing.T) {
+	content := `# filter = old-name stays, being a comment
+[app]
+filter    = old-name[mode=aggressive]
+logpath   = /logs/old-name.log
+[other]
+filter = old-names
+banaction = iptables-allports
+action = %(action_)s
+         old-name[port=22]
+`
+	if n := Mentions(content, refKeys[Filters], "old-name"); n != 1 {
+		t.Fatalf("%d mentions as a filter", n)
+	}
+	got := Rewrite(content, refKeys[Filters], "old-name", "new-name")
+	for _, want := range []string{
+		"# filter = old-name stays",
+		"filter    = new-name[mode=aggressive]",
+		"logpath   = /logs/old-name.log",
+		"filter = old-names",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lacks %q:\n%s", want, got)
+		}
+	}
+	// An action carried on to the next line is still the action's value.
+	got = Rewrite(content, refKeys[Actions], "old-name", "new-name")
+	if !strings.Contains(got, "         new-name[port=22]") || !strings.Contains(got, "filter    = old-name[") {
+		t.Errorf("as an action:\n%s", got)
+	}
+}
+
+func TestARenameMovesTheFileAndTheJailsThatNameIt(t *testing.T) {
+	s, _, tools, root := server(t)
+	do(t, s, "PUT", "/api/files/filters/typo.local", `{"content":"[Definition]\n","version":""}`)
+	do(t, s, "PUT", "/api/files/jails/app.local", `{"content":"[app]\nfilter = typo\n","version":""}`)
+	_, out := do(t, s, "GET", "/api/files/filters/typo.local/references", "")
+	if refs := out["files"].([]any); len(refs) != 1 || refs[0].(map[string]any)["name"] != "app.local" {
+		t.Fatalf("references %v", out)
+	}
+	code, out := do(t, s, "POST", "/api/files/filters/typo.local/rename",
+		`{"to":"right.local","version":"`+VersionOf("[Definition]\n")+`","references":true}`)
+	if code != http.StatusOK {
+		t.Fatalf("%d %v", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "user", "filter.d", "typo.local")); err == nil {
+		t.Fatal("the old name is still there")
+	}
+	if read(t, filepath.Join(root, "user", "filter.d", "right.local")) != "[Definition]\n" {
+		t.Fatal("the new name does not hold the content")
+	}
+	if read(t, filepath.Join(root, "user", "jail.d", "app.local")) != "[app]\nfilter = right\n" {
+		t.Fatal("the jail still names the old filter")
+	}
+	if also := out["also"].([]any); len(also) != 1 {
+		t.Fatalf("also %v", also)
+	}
+	// Two saves to set up, and the rename as one reload.
+	if tools.reloads != 3 {
+		t.Fatalf("reloaded %d times", tools.reloads)
+	}
+}
+
+func TestARenameOntoAnExistingFileOrOfSettingsIsRefused(t *testing.T) {
+	s, _, _, root := server(t)
+	do(t, s, "PUT", "/api/files/filters/ok.local", `{"content":"[Definition]\n","version":""}`)
+	write(t, filepath.Join(root, "user", "filter.d", "keep.local"), "fine")
+	code, out := do(t, s, "POST", "/api/files/filters/ok.local/rename",
+		`{"to":"keep.local","version":"`+VersionOf("[Definition]\n")+`"}`)
+	if code != http.StatusConflict {
+		t.Fatalf("renaming onto a file that exists answered %d %v", code, out)
+	}
+	if read(t, filepath.Join(root, "user", "filter.d", "ok.local")) != "[Definition]\n" {
+		t.Fatal("the file moved")
+	}
+	code, _ = do(t, s, "POST", "/api/files/settings/jail.local/rename", `{"to":"fail2ban.local","version":""}`)
+	if code != http.StatusBadRequest {
+		t.Fatalf("renaming settings answered %d", code)
 	}
 }

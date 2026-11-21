@@ -268,3 +268,72 @@ func FilterOf(content, jail string) string {
 	}
 	return jail
 }
+
+// refKeys are where a jail names a filter or an action.
+var refKeys = map[Kind][]string{
+	Filters: {"filter"},
+	Actions: {"action", "banaction", "banaction_allports"},
+}
+
+// bare is a file's name as a jail names it: without .local or .conf.
+func bare(name string) string {
+	return strings.TrimSuffix(strings.TrimSuffix(name, ".local"), ".conf")
+}
+
+// mentionOf matches a name as a jail names a filter or an action: alone, followed by options in
+// brackets, a space, a comma or the end, and preceded by nothing that would make it part of a
+// longer name.
+func mentionOf(name string) *regexp.Regexp {
+	return regexp.MustCompile(`(^|[\s=,:])` + regexp.QuoteMeta(name) + `(\[|\s|,|$)`)
+}
+
+// Mentions counts the times content names name in the values of keys.
+func Mentions(content string, keys []string, name string) int {
+	re, n := mentionOf(name), 0
+	eachValue(content, keys, func(v string) string {
+		n += len(re.FindAllStringIndex(v, -1))
+		return v
+	})
+	return n
+}
+
+// Rewrite changes every mention of old to new in the values of keys.
+func Rewrite(content string, keys []string, old, new string) string {
+	re := mentionOf(old)
+	return eachValue(content, keys, func(v string) string {
+		// Twice over at most: adjacent mentions share the character between them, and the
+		// first pass takes it for the first one.
+		for range 2 {
+			v = re.ReplaceAllString(v, "${1}"+new+"${2}")
+		}
+		return v
+	})
+}
+
+// eachValue passes the values of keys through f, a value's lines that carry it on included,
+// and leaves everything else as it was.
+func eachValue(content string, keys []string, f func(string) string) string {
+	lines := strings.Split(content, "\n")
+	inKey := false
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";"):
+			continue
+		case sectionPattern.MatchString(line):
+			inKey = false
+		case line[0] == ' ' || line[0] == '\t':
+			if inKey {
+				lines[i] = f(line)
+			}
+		default:
+			m := keyLine.FindStringSubmatch(line)
+			inKey = m != nil && slices.Contains(keys, m[1])
+			if inKey {
+				at := len(line) - len(m[2])
+				lines[i] = line[:at] + f(m[2])
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}

@@ -5,6 +5,7 @@ import type {
   CurrentBan,
   Engine,
   File,
+  FileRef,
   Jail,
   Kind,
   LogPage,
@@ -72,6 +73,18 @@ export const deleteFile = (kind: Kind, name: string, version: string) =>
   request<Applied>(`${filePath(kind, name)}${query({ version })}`, {
     method: "DELETE",
   });
+
+/** The jail files that name this filter or action. */
+export const getFileReferences = (kind: Kind, name: string) =>
+  request<{ files: FileRef[] }>(`${filePath(kind, name)}/references`);
+
+/** Moves a file to a new name; with references, the jails naming it name the new one. */
+export const postFileRename = (
+  kind: Kind,
+  name: string,
+  body: { to: string; version: string; references: boolean },
+) =>
+  request<Applied>(`${filePath(kind, name)}/rename`, { method: "POST", body });
 
 /** Whether fail2ban would start with this change, without making it. */
 export const postCheck = (body: {

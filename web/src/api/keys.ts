@@ -12,6 +12,9 @@ export const qk = {
   stats: (days: number) => ["history", "stats", days] as const,
   files: ["files"] as const,
   file: (kind: Kind, name: string) => ["files", kind, name] as const,
+  /** Under the file, so whatever makes the file stale makes this stale too. */
+  fileReferences: (kind: Kind, name: string) =>
+    ["files", kind, name, "references"] as const,
   stock: ["stock"] as const,
   stockFile: (path: string) => ["stock", path] as const,
 };

@@ -19,6 +19,7 @@ import { CodeEditor } from "@app/editor/CodeEditor";
 import { ago } from "@app/format";
 import { Link } from "@app/islands/app/Link";
 import { RegexTester } from "@app/islands/app/RegexTester";
+import { RenameDialog } from "@app/islands/app/RenameDialog";
 import { go, hold, paths } from "@app/islands/app/route";
 import { templateFor } from "@app/islands/app/templates";
 
@@ -72,6 +73,7 @@ export function FileEditor({
   );
   const [draft, setDraft] = useState("");
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const [renaming, setRenaming] = useState(false);
 
   useEffect(() => {
     if (base) return;
@@ -206,6 +208,14 @@ export function FileEditor({
   const busy = save.isPending || check.isPending || remove.isPending;
   const loading = !fresh && file.isPending;
 
+  const renamed = (to: string) => {
+    // What was on disk under the old name is the new name's now.
+    dirtyRef.current = false;
+    client.removeQueries({ queryKey: qk.file(kind, name) });
+    refresh();
+    go(paths.file(kind, to), true);
+  };
+
   return (
     <Frame>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -249,6 +259,16 @@ export function FileEditor({
             }}
           >
             Delete…
+          </Button>
+        ) : null}
+        {!fresh && file.data && kind !== "settings" ? (
+          <Button
+            size="bar"
+            disabled={busy || dirty}
+            title={dirty ? "Save or discard the changes first" : undefined}
+            onClick={() => setRenaming(true)}
+          >
+            Rename…
           </Button>
         ) : null}
         {dirty && !fresh ? (
@@ -303,6 +323,14 @@ export function FileEditor({
       {kind === "filters" && base !== null ? (
         <RegexTester file={name} content={draft} />
       ) : null}
+      <RenameDialog
+        open={renaming}
+        onClose={() => setRenaming(false)}
+        kind={kind}
+        name={name}
+        version={base?.version ?? ""}
+        onRenamed={renamed}
+      />
     </Frame>
   );
 }

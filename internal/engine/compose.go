@@ -30,8 +30,9 @@ type Composer struct {
 	Database string
 }
 
-// Compose writes the directory at dst, replacing whatever was there.
-func (c *Composer) Compose(dst string, change *Change) error {
+// Compose writes the directory at dst, replacing whatever was there, with the files as the
+// changes would leave them.
+func (c *Composer) Compose(dst string, changes ...Change) error {
 	if err := os.RemoveAll(dst); err != nil {
 		return fmt.Errorf("clearing %s: %w", dst, err)
 	}
@@ -47,16 +48,27 @@ func (c *Composer) Compose(dst string, change *Change) error {
 	if err != nil {
 		return err
 	}
+	changed := func(k Kind, name string) bool {
+		for _, ch := range changes {
+			if ch.Kind == k && ch.Name == name {
+				return true
+			}
+		}
+		return false
+	}
 	for _, f := range files {
-		if change != nil && f.Kind == change.Kind && f.Name == change.Name {
+		if changed(f.Kind, f.Name) {
 			continue
 		}
 		if err := copyFile(c.Files.path(f.Kind, f.Name), filepath.Join(dst, dirOf[f.Kind], f.Name)); err != nil {
 			return err
 		}
 	}
-	if change != nil && change.Content != nil {
-		if err := os.WriteFile(filepath.Join(dst, dirOf[change.Kind], change.Name), []byte(*change.Content), 0o644); err != nil {
+	for _, ch := range changes {
+		if ch.Content == nil {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(dst, dirOf[ch.Kind], ch.Name), []byte(*ch.Content), 0o644); err != nil {
 			return err
 		}
 	}

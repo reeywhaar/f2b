@@ -2,7 +2,7 @@
 # Runs a built engine image through what it is for, with a real fail2ban and a real firewall in
 # the container's own network namespace: a filter and a jail saved through the API, failures
 # written to a log, the ban that follows in fail2ban and in iptables, an unban, a configuration
-# fail2ban refuses, the filter tester, and a restart that puts the ban back.
+# fail2ban refuses, the filter tester, a restart that puts the ban back, and a rename.
 #
 #   docker build --target engine -t f2b-engine:smoke . && IMAGE=f2b-engine:smoke .github/smoke/smoke.sh
 set -eu
@@ -92,6 +92,16 @@ docker exec "$name" test ! -e /data/fail2ban/jail.d/bad.local || fail "a refused
 echo "==> the tester runs fail2ban-regex"
 out=$(api POST /api/regex '{"filter":"app","log":"/logs/app.log"}')
 case "$out" in 200*'"matched":3'*) ;; *) fail "regex: $out" ;; esac
+
+echo "==> a rename that would leave a jail naming nothing is refused; with the jail, it is one change"
+version=$(api GET /api/files/filters/app.local | sed 's/.*"version":"\([0-9a-f]*\)".*/\1/')
+out=$(api POST /api/files/filters/app.local/rename "{\"to\":\"app-auth.local\",\"version\":\"$version\",\"references\":false}")
+case "$out" in 422*config_rejected*) ;; *) fail "rename alone: $out" ;; esac
+out=$(api POST /api/files/filters/app.local/rename "{\"to\":\"app-auth.local\",\"version\":\"$version\",\"references\":true}")
+case "$out" in 200*'"also":[{"kind":"jails","name":"app.local"}]'*'"reload":{"ok":true'*) ;; *) fail "rename: $out" ;; esac
+docker exec "$name" grep -q '^filter = app-auth$' /data/fail2ban/jail.d/app.local || fail "the jail names the old filter"
+docker exec "$name" test ! -e /data/fail2ban/filter.d/app.local || fail "the old name is still there"
+wait_for '"name":"app"' api GET /api/jails
 
 echo "==> healthy"
 docker exec "$name" f2b healthcheck engine || fail "healthcheck"

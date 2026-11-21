@@ -7,6 +7,9 @@ import { mount } from "@app/test/harness";
 
 const putFile = vi.fn();
 const getFile = vi.fn();
+const getFileReferences = vi.fn();
+const postFileRename = vi.fn();
+const go = vi.fn();
 
 vi.mock("@app/api/actions", () => ({
   getFile: (...a: unknown[]) => getFile(...a),
@@ -16,6 +19,13 @@ vi.mock("@app/api/actions", () => ({
   postCheck: vi.fn(),
   postRegex: vi.fn(),
   deleteFile: vi.fn(),
+  getFileReferences: (...a: unknown[]) => getFileReferences(...a),
+  postFileRename: (...a: unknown[]) => postFileRename(...a),
+}));
+
+vi.mock("@app/islands/app/route", async (actual) => ({
+  ...(await actual<typeof import("@app/islands/app/route")>()),
+  go: (...a: unknown[]) => go(...a),
 }));
 
 /** The editor stands in as a textarea: what it is fed and what it reports are what matter here. */
@@ -127,5 +137,34 @@ describe("saving a file", () => {
       ),
     );
     expect(getFile).not.toHaveBeenCalled();
+  });
+
+  it("renames a filter, and the jails that name it with it", async () => {
+    getFile.mockResolvedValue({ file, content: "[Definition]\n" });
+    getFileReferences.mockResolvedValue({
+      files: [{ kind: "jails", name: "app-jail.local" }],
+    });
+    postFileRename.mockResolvedValue({
+      file: { ...file, name: "right.local" },
+      also: [{ kind: "jails", name: "app-jail.local" }],
+      reload: { ok: true, output: "OK" },
+    });
+    mount(<FileEditor kind="filters" name="app.local" fresh={false} />);
+    await screen.findByLabelText("app.local, editable");
+    fireEvent.click(screen.getByRole("button", { name: "Rename…" }));
+    const field = await screen.findByDisplayValue("app.local");
+    fireEvent.change(field, { target: { value: "right" } });
+    expect(await screen.findByText("jail.d/app-jail.local")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    await waitFor(() =>
+      expect(postFileRename).toHaveBeenCalledWith("filters", "app.local", {
+        to: "right.local",
+        version: "v1",
+        references: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(go).toHaveBeenCalledWith("/config/filters/right.local", true),
+    );
   });
 });

@@ -76,9 +76,19 @@ bracketed names in a file other than DEFAULT and INCLUDES: in a jail file, its j
 
 `PUT /api/files/{kind}/{name}` `{content, version}` — `version` is the file's as it was read, or
 `""` for a new file. Checked with `fail2ban-client --test` against everything else, then written,
-then fail2ban reloads: `{file, reload: {ok, output}}`. A reload that fails leaves the file saved.
+then fail2ban reloads: `{file, also, reload: {ok, output}}`. A reload that fails leaves the file
+saved.
 
 `DELETE /api/files/{kind}/{name}?version=` — the same, without the file. `{file: null, reload}`.
+
+`GET /api/files/{kind}/{name}/references` — `{files}`: the jail files, and `jail.local`, that name
+this filter (`filter =`) or action (`action =`, `banaction =`), as references to them.
+
+`POST /api/files/{kind}/{name}/rename` `{to, version, references}` — moves the file to `to`. With
+`references`, the jail files that name it are changed to name the new one, and everything is
+checked as one change and reloaded once: `{file, also, reload}`, `also` being the jail files
+changed. Without it, a rename that leaves a jail naming what is gone is fail2ban's to refuse.
+Settings files keep their names.
 
 `POST /api/check` `{kind, name, content}` — whether fail2ban would start with that file as given,
 or without it for `content: null`, changing nothing: `{ok, output}`.

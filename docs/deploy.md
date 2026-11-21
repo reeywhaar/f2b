@@ -86,6 +86,11 @@ check leaves the file saved and says so; fail2ban carries on as it was.
 fail2ban reads a filter only when a jail uses it, so a broken filter no jail names yet passes the
 check, and is refused when a jail first names it.
 
+A rename is the same, with more in it: the file under its new name, the old name gone, and, when
+asked, every jail file that names it changed to name the new one. A jail names a filter or an
+action by its file's name, so renaming one alone would leave the jail naming nothing, which
+fail2ban refuses. All of it is checked as one change, written new names first, and reloaded once.
+
 A save carries the version of the file it was made from. A file that changed on disk since —
 from a shell, or another browser — is a `409`, and the interface offers to open it again rather
 than overwrite.
