@@ -16,15 +16,22 @@ import { useConfirm } from "@app/components/Confirm";
 import { DummyRows } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
 import { Menu } from "@app/components/Menu";
-import { ChevronRightIcon } from "@app/components/icons/Icon";
 import { CodeEditor } from "@app/editor/CodeEditor";
 import { ago } from "@app/format";
-import { Link } from "@app/islands/app/Link";
 import { RegexTester } from "@app/islands/app/RegexTester";
 import { NameDialog } from "@app/islands/app/NameDialog";
+import { Crumbs } from "@app/islands/app/Crumbs";
 import { RenameDialog } from "@app/islands/app/RenameDialog";
 import { go, hold, paths } from "@app/islands/app/route";
 import { seed, seeded, templateFor, unseed } from "@app/islands/app/templates";
+
+/** The headings on the Config page each kind is listed under. */
+const sections: Record<Kind, string> = {
+  jails: "Jails",
+  filters: "Filters",
+  actions: "Actions",
+  settings: "Settings",
+};
 
 const dirs: Record<Kind, string> = {
   jails: "jail.d/",
@@ -223,121 +230,116 @@ export function FileEditor({
 
   return (
     <Frame>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Link href={paths.config} className="text-sm text-muted hover:text-fg">
-          Config
-        </Link>
-        <ChevronRightIcon className="shrink-0 text-faint" />
-        <h1 className="font-mono text-base font-semibold">
-          <span className="text-muted">{dirs[kind]}</span>
-          {name}
-        </h1>
-        {fresh ? (
-          <span className="rounded bg-fill px-1.5 py-0.5 text-xs text-muted">
-            new
-          </span>
-        ) : file.data ? (
-          <span className="text-xs text-faint">
-            changed {ago(file.data.file.modified)}
-          </span>
-        ) : null}
-        <span className="flex-1" />
-        {/* What is done with the change has the row; what is done to the file, now and then,
-            is behind the menu beside it. One row at any width. */}
-        <div className="ml-auto flex items-center gap-2">
-          {!fresh && file.data ? (
-            <Menu
-              label="More for this file"
-              items={[
-                ...(kind !== "settings"
-                  ? [
-                      {
-                        label: "Rename…",
-                        disabled: busy || dirty,
-                        title: dirty
-                          ? "Save or discard the changes first"
-                          : undefined,
-                        onSelect: () => setRenaming(true),
-                      },
-                      {
-                        label: "Duplicate…",
-                        disabled: busy,
-                        onSelect: () => setDuplicating(true),
-                      },
-                    ]
-                  : []),
-                {
-                  label: "Delete…",
-                  danger: true,
-                  disabled: busy,
-                  onSelect: async () => {
-                    if (
-                      await confirm({
-                        title: `Delete ${name}`,
-                        message:
-                          kind === "jails"
-                            ? "The file goes, and fail2ban reloads without it: its jails stop, and their bans are lifted. fail2ban's database keeps their history."
-                            : "The file goes, if fail2ban would still start without it, and fail2ban reloads.",
-                        confirm: "Delete",
-                        danger: true,
-                      })
-                    ) {
-                      remove.mutate();
-                    }
-                  },
-                },
-              ]}
-            />
+      {/* The title row belongs to the editor under it, not a section of its own. */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Crumbs section={sections[kind]} name={name} />
+          {fresh ? (
+            <span className="rounded bg-fill px-1.5 py-0.5 text-xs text-muted">
+              new
+            </span>
+          ) : file.data ? (
+            <span className="text-xs text-faint">
+              changed {ago(file.data.file.modified)}
+            </span>
           ) : null}
-          {dirty && !fresh ? (
+          <span className="flex-1" />
+          {/* What is done with the change has the row; what is done to the file, now and then,
+              is behind the menu beside it. One row at any width. */}
+          <div className="ml-auto flex items-center gap-2">
+            {!fresh && file.data ? (
+              <Menu
+                label="More for this file"
+                items={[
+                  ...(kind !== "settings"
+                    ? [
+                        {
+                          label: "Rename…",
+                          disabled: busy || dirty,
+                          title: dirty
+                            ? "Save or discard the changes first"
+                            : undefined,
+                          onSelect: () => setRenaming(true),
+                        },
+                        {
+                          label: "Duplicate…",
+                          disabled: busy,
+                          onSelect: () => setDuplicating(true),
+                        },
+                      ]
+                    : []),
+                  {
+                    label: "Delete…",
+                    danger: true,
+                    disabled: busy,
+                    onSelect: async () => {
+                      if (
+                        await confirm({
+                          title: `Delete ${name}`,
+                          message:
+                            kind === "jails"
+                              ? "The file goes, and fail2ban reloads without it: its jails stop, and their bans are lifted. fail2ban's database keeps their history."
+                              : "The file goes, if fail2ban would still start without it, and fail2ban reloads.",
+                          confirm: "Delete",
+                          danger: true,
+                        })
+                      ) {
+                        remove.mutate();
+                      }
+                    },
+                  },
+                ]}
+              />
+            ) : null}
+            {dirty && !fresh ? (
+              <Button
+                size="bar"
+                disabled={busy}
+                onClick={() => base && setDraft(base.content)}
+              >
+                Discard
+              </Button>
+            ) : null}
             <Button
               size="bar"
-              disabled={busy}
-              onClick={() => base && setDraft(base.content)}
+              disabled={busy || loading}
+              onClick={() => check.mutate()}
             >
-              Discard
+              {check.isPending ? "Checking…" : "Check"}
             </Button>
-          ) : null}
-          <Button
-            size="bar"
-            disabled={busy || loading}
-            onClick={() => check.mutate()}
-          >
-            {check.isPending ? "Checking…" : "Check"}
-          </Button>
-          <Button
-            size="bar"
-            variant="solid"
-            disabled={busy || loading || !dirty}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
+            <Button
+              size="bar"
+              variant="solid"
+              disabled={busy || loading || !dirty}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </div>
+        {file.isError ? (
+          <p className="text-sm text-accent">{messageOf(file.error)}</p>
+        ) : base === null ? (
+          <DummyRows count={8} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <CodeEditor
+              label={`${name}, editable`}
+              value={draft}
+              onChange={setDraft}
+              onSave={() => {
+                if (dirty && !busy) save.mutate();
+              }}
+            />
+            <p className="text-xs text-faint">
+              Cmd-S or Ctrl-S saves; Cmd-F or Ctrl-F finds. Tab indents, which
+              carries a value on to the next line. Escape, then Tab, leaves the
+              editor.
+            </p>
+            <OutcomeView outcome={outcome} onReopen={reopen} />
+          </div>
+        )}
       </div>
-
-      {file.isError ? (
-        <p className="text-sm text-accent">{messageOf(file.error)}</p>
-      ) : base === null ? (
-        <DummyRows count={8} />
-      ) : (
-        <div className="flex flex-col gap-3">
-          <CodeEditor
-            label={`${name}, editable`}
-            value={draft}
-            onChange={setDraft}
-            onSave={() => {
-              if (dirty && !busy) save.mutate();
-            }}
-          />
-          <p className="text-xs text-faint">
-            Cmd-S or Ctrl-S saves; Cmd-F or Ctrl-F finds. Tab indents, which
-            carries a value on to the next line. Escape, then Tab, leaves the
-            editor.
-          </p>
-          <OutcomeView outcome={outcome} onReopen={reopen} />
-        </div>
-      )}
 
       {kind === "filters" && base !== null ? (
         <RegexTester file={name} content={draft} />
