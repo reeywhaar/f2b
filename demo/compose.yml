@@ -29,6 +29,7 @@ services:
         condition: service_healthy
     environment:
       ADMIN_PASSWORD: demodemo
+      F2B_LABEL: demo
       F2B_PUBLIC_URL: http://f2b.localhost:${DEMO_PORT:-8080}
     volumes:
       - data:/data

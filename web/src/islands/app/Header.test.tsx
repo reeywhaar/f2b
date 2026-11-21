@@ -5,6 +5,7 @@ import { Header } from "@app/islands/app/Header";
 import { mount } from "@app/test/harness";
 
 vi.mock("@app/api/actions", () => ({
+  getAuthMe: async () => ({ ok: true, version: "dev", label: "hellogram" }),
   getEngine: async () => ({
     version: "dev",
     fail2ban: {
@@ -32,5 +33,11 @@ describe("the header", () => {
       .getAllByRole("link")
       .filter((a) => a.getAttribute("href") === "/log");
     expect(toLog).toHaveLength(1);
+  });
+
+  it("names the server, in the header and the tab", async () => {
+    mount(<Header route={{ page: "overview", days: 30 }} />);
+    expect(await screen.findByText("hellogram")).toBeTruthy();
+    await waitFor(() => expect(document.title).toBe("hellogram · f2b"));
   });
 });

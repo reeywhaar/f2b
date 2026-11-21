@@ -32,7 +32,14 @@ const (
 	// TrustedProxiesEnv is whose X-Forwarded-For is believed: addresses and ranges, "private"
 	// for the private and loopback ranges, or "none". Unset, "private".
 	TrustedProxiesEnv = "F2B_TRUSTED_PROXIES"
+
+	// LabelEnv names this server in the interface, for telling several apart: in the header and
+	// the tab's title. Unset, nothing is shown.
+	LabelEnv = "F2B_LABEL"
 )
+
+// labelMax keeps a label to what fits in a header beside the sections.
+const labelMax = 40
 
 const DefaultDataDir = "/data"
 
@@ -50,6 +57,8 @@ type Web struct {
 	Secure bool
 	// TrustedProxies are the peers whose X-Forwarded-For says who the caller is.
 	TrustedProxies Proxies
+	// Label names this server in the interface, or is "".
+	Label string
 }
 
 // LoadCommon reads what both commands share. Errors are written for somebody looking at a
@@ -93,6 +102,10 @@ func LoadWeb() (*Web, error) {
 			return nil, fmt.Errorf("%s: %q should be an http:// or https:// address, e.g. https://f2b.example.com", PublicURLEnv, raw)
 		}
 		w.Secure = u.Scheme == "https"
+	}
+	w.Label = strings.TrimSpace(os.Getenv(LabelEnv))
+	if n := len([]rune(w.Label)); n > labelMax {
+		return nil, fmt.Errorf("%s is %d characters, and a label is at most %d: it goes in the header", LabelEnv, n, labelMax)
 	}
 	proxies := strings.TrimSpace(os.Getenv(TrustedProxiesEnv))
 	if proxies == "" {

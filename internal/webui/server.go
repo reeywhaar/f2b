@@ -136,7 +136,7 @@ func (s *Server) logoutEverywhere(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	reply.JSON(w, http.StatusOK, map[string]any{"ok": true, "version": app.Version})
+	reply.JSON(w, http.StatusOK, map[string]any{"ok": true, "version": app.Version, "label": s.cfg.Label})
 }
 
 // requireSession admits a request that carries a live session, and nothing else.

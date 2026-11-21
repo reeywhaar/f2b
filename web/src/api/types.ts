@@ -11,6 +11,9 @@ export type DaemonState = {
 
 export type Engine = { version: string; fail2ban: DaemonState };
 
+/** Who the web says this is: its version, and the label F2B_LABEL gives it, or "". */
+export type Me = { ok: boolean; version: string; label: string };
+
 export type Kind = "jails" | "filters" | "actions" | "settings";
 
 export type FileRef = { kind: Kind; name: string };

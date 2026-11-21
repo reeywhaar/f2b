@@ -2,6 +2,7 @@ import type { Kind } from "@app/api/types";
 
 /** Every query key, in one object, so what one change makes stale is found by prefix. */
 export const qk = {
+  me: ["me"] as const,
   engine: ["engine"] as const,
   jails: ["jails"] as const,
   bans: ["bans"] as const,

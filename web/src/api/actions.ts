@@ -9,6 +9,7 @@ import type {
   Jail,
   Kind,
   LogPage,
+  Me,
   RegexResult,
   Result,
   Stats,
@@ -25,6 +26,8 @@ export const postAuthLogout = () =>
 
 export const postAuthLogoutEverywhere = () =>
   request<void>("/api/auth/logout-everywhere", { method: "POST" });
+
+export const getAuthMe = () => request<Me>("/api/auth/me");
 
 export const getEngine = () => request<Engine>("/api/engine");
 

@@ -33,6 +33,7 @@ func server(t *testing.T) (*Server, *bytes.Buffer, string) {
 		Password:       password,
 		Secure:         true,
 		TrustedProxies: proxies,
+		Label:          "hellogram",
 	}
 	sessions, err := NewSessions(cfg.Layout.SessionKey, password, true)
 	if err != nil {
@@ -227,5 +228,16 @@ func TestAFileNameInARouteIsANavigationAndAMissingAssetIsNot(t *testing.T) {
 		if rec := send(s, "GET", path, "", cookie); rec.Code != want {
 			t.Errorf("%s answered %d", path, rec.Code)
 		}
+	}
+}
+
+func TestTheLabelIsToldOnlyToASignedInBrowser(t *testing.T) {
+	s, _, _ := server(t)
+	if rec := send(s, "GET", "/api/auth/me", ""); strings.Contains(rec.Body.String(), "hellogram") {
+		t.Fatal("a stranger was told the label")
+	}
+	rec := send(s, "GET", "/api/auth/me", "", signIn(t, s))
+	if !strings.Contains(rec.Body.String(), `"label":"hellogram"`) {
+		t.Fatalf("answered %s", rec.Body)
 	}
 }

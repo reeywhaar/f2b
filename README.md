@@ -57,6 +57,7 @@ services:
     restart: unless-stopped
     environment:
       ADMIN_PASSWORD: … # openssl rand -base64 24
+      F2B_LABEL: web-1 # optional: which server this is, in the header
     volumes:
       - data:/data
     networks: [caddy]
@@ -86,6 +87,7 @@ linuxserver/fail2ban.
 | `ADMIN_PASSWORD` | web | *required.* At least 8 characters. Changing it signs every browser out |
 | `F2B_PUBLIC_URL` | web | where the interface is opened; only an `http://` one matters, sending the cookie without Secure |
 | `F2B_TRUSTED_PROXIES` | web | whose `X-Forwarded-For` is believed; `private` by default |
+| `F2B_LABEL` | web | names this server in the header and the tab's title, for telling several apart |
 | `F2B_DATA_DIR` | both | the shared directory; `/data` by default |
 | `F2B_LOG_LEVEL` | both | `debug`, `info`, `warn` or `error` |
 
