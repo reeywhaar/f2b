@@ -189,8 +189,8 @@ func (s *Supervisor) watch(ctx context.Context, pid int) {
 	}
 }
 
-// Jails asks for every running jail and its counts.
-func (s *Supervisor) Jails(ctx context.Context) ([]Jail, error) {
+// jailNames is every running jail, in order.
+func (s *Supervisor) jailNames(ctx context.Context) ([]string, error) {
 	v, err := s.Client.Do(ctx, "status")
 	if err != nil {
 		return nil, err
@@ -202,6 +202,15 @@ func (s *Supervisor) Jails(ctx context.Context) ([]Jail, error) {
 		}
 	}
 	sort.Strings(names)
+	return names, nil
+}
+
+// Jails asks for every running jail and its counts.
+func (s *Supervisor) Jails(ctx context.Context) ([]Jail, error) {
+	names, err := s.jailNames(ctx)
+	if err != nil {
+		return nil, err
+	}
 	jails := make([]Jail, 0, len(names))
 	for _, name := range names {
 		j := Jail{Name: name, Logs: []string{}}
@@ -256,4 +265,20 @@ func (s *Supervisor) Unban(ctx context.Context, jail, ip string) error {
 	}
 	_, err := s.Client.Do(ctx, "set", jail, "unbanip", ip)
 	return err
+}
+
+func (s *Supervisor) Actions(ctx context.Context) (map[string][]string, error) {
+	names, err := s.jailNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string][]string, len(names))
+	for _, name := range names {
+		v, err := s.Client.Do(ctx, "get", name, "actions")
+		if err != nil {
+			return nil, err
+		}
+		out[name] = f2bsock.Strings(v)
+	}
+	return out, nil
 }

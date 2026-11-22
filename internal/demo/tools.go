@@ -50,6 +50,11 @@ func exists(p string) bool {
 	return err == nil
 }
 
+// Actions is none, as the demo's fail2ban runs none.
+func (t tools) Actions(ctx context.Context, dir string) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
 func (t tools) Reload(ctx context.Context, dir string) engine.Result {
 	if err := t.d.reload(dir); err != nil {
 		return engine.Result{Output: "ERROR   " + err.Error()}

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -524,13 +525,48 @@ func (s *Server) applyAll(ctx context.Context, plan []planned) (Applied, error) 
 		return out, nil
 	}
 	out.Reload = s.Tools.Reload(ctx, s.Live)
-	if out.Reload.OK {
-		s.Lines.Note("NOTICE", "configuration reloaded after a change to "+what)
-	} else {
+	if !out.Reload.OK {
 		s.Lines.Note("ERROR", "the reload after a change to "+what+" failed")
 		s.Log.Warn("reload failed", "name", what)
+		return out, nil
+	}
+	s.Lines.Note("NOTICE", "configuration reloaded after a change to "+what)
+	// Only a jail or a setting says which actions a jail has.
+	if !slices.ContainsFunc(changes, func(c Change) bool { return c.Kind == Jails || c.Kind == Settings }) {
+		return out, nil
+	}
+	if jails := s.adrift(ctx); len(jails) > 0 {
+		list := strings.Join(jails, ", ")
+		s.Lines.Note("NOTICE", "restarting fail2ban: its reload left "+list+" without the actions configured")
+		s.Log.Warn("reload left jails without their actions; restarting fail2ban", "jails", list)
+		s.Daemon.Restart()
+		out.Reload.Output += "\n\nThe reload left " + list + " without the actions configured, so fail2ban is restarting, which starts them. Its bans come back from its database."
 	}
 	return out, nil
+}
+
+// adrift names the running jails whose actions are not the ones the live configuration gives
+// them. fail2ban 1.1's reload drops an action a jail gains under a new name, as changing its
+// banaction does, and only a restart starts it.
+func (s *Server) adrift(ctx context.Context) []string {
+	want, err := s.Tools.Actions(ctx, s.Live)
+	if err != nil {
+		s.Log.Warn("the configured actions could not be read", "error", err)
+		return nil
+	}
+	have, err := s.Daemon.Actions(ctx)
+	if err != nil {
+		s.Log.Warn("the running actions could not be read", "error", err)
+		return nil
+	}
+	var out []string
+	for jail, acts := range have {
+		if !slices.Equal(slices.Sorted(slices.Values(acts)), slices.Sorted(slices.Values(want[jail]))) {
+			out = append(out, jail)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (s *Server) check(w http.ResponseWriter, r *http.Request) {

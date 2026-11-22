@@ -77,7 +77,8 @@ bracketed names in a file other than DEFAULT and INCLUDES: in a jail file, its j
 `PUT /api/files/{kind}/{name}` `{content, version}` — `version` is the file's as it was read, or
 `""` for a new file. Checked with `fail2ban-client --test` against everything else, then written,
 then fail2ban reloads: `{file, also, reload: {ok, output}}`. A reload that fails leaves the file
-saved.
+saved. One that leaves a jail without the actions configured for it is followed by a restart,
+which `output` says.
 
 `DELETE /api/files/{kind}/{name}?version=` — the same, without the file. `{file: null, reload}`.
 

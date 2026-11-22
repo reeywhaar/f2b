@@ -201,6 +201,11 @@ func (d *daemon) Unban(ctx context.Context, jail, ip string) error {
 	return nil
 }
 
+// Actions is none for every jail: the demo's bans are kept in memory, by no action.
+func (d *daemon) Actions(ctx context.Context) (map[string][]string, error) {
+	return map[string][]string{}, d.running()
+}
+
 // expire lifts the bans whose time is up.
 func (d *daemon) expire() {
 	now := d.now()

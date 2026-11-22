@@ -13,6 +13,8 @@ type Daemon interface {
 	Ban(ctx context.Context, jail, ip string) error
 	// Unban lifts a ban in one jail, or in every jail when jail is "".
 	Unban(ctx context.Context, jail, ip string) error
+	// Actions is the actions each running jail has, by jail.
+	Actions(ctx context.Context) (map[string][]string, error)
 }
 
 // Tools are fail2ban's own programs, run over a composed configuration directory.
@@ -23,6 +25,8 @@ type Tools interface {
 	Reload(ctx context.Context, dir string) Result
 	// Regex runs filter, a name with options or not, over the file at log.
 	Regex(ctx context.Context, dir, log, filter string) Result
+	// Actions is the actions the configuration in dir gives each jail it enables, by jail.
+	Actions(ctx context.Context, dir string) (map[string][]string, error)
 }
 
 // Result is what one of the tools said.

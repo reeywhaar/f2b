@@ -1,8 +1,9 @@
 #!/bin/sh
 # Runs a built engine image through what it is for, with a real fail2ban and a real firewall in
 # the container's own network namespace: a filter and a jail saved through the API, failures
-# written to a log, the ban that follows in fail2ban and in iptables, an unban, a configuration
-# fail2ban refuses, the filter tester, a restart that puts the ban back, and a rename.
+# written to a log, the ban that follows in fail2ban and in iptables, an unban, a jail's action
+# changed for one of another name, a configuration fail2ban refuses, the filter tester, a restart
+# that puts the ban back, and a rename.
 #
 #   docker build --target engine -t f2b-engine:smoke . && IMAGE=f2b-engine:smoke .github/smoke/smoke.sh
 set -eu
@@ -83,6 +84,24 @@ echo "==> an unban lifts it"
 out=$(api DELETE '/api/bans/203.0.113.9?jail=app')
 case "$out" in 204*) ;; *) fail "unban: $out" ;; esac
 wait_for '"bans":[]' api GET /api/bans
+
+echo "==> a jail given an action under a new name has it: fail2ban's reload alone drops it"
+since=$(api GET /api/engine | sed 's/.*"since":\([0-9]*\).*/\1/')
+version=$(api GET /api/files/jails/app.local | sed 's/.*"version":"\([0-9a-f]*\)".*/\1/')
+out=$(api PUT /api/files/jails/app.local "{\"content\":\"[app]\\nenabled = true\\nfilter = app\\nlogpath = /logs/app.log\\nbackend = polling\\nmaxretry = 3\\nbantime = 1h\\nbanaction = iptables-multiport\\nport = 1:65535\\n\",\"version\":\"$version\"}")
+case "$out" in 200*'"reload":{"ok":true'*'restarting'*) ;; *) fail "new action: $out" ;; esac
+for _ in $(seq 1 60); do
+  out=$(api GET /api/engine 2>&1 || true)
+  now=$(echo "$out" | sed 's/.*"since":\([0-9]*\).*/\1/')
+  case "$out" in *'"state":"running"'*) [ "$now" != "$since" ] && break ;; esac
+  sleep 0.5
+done
+case "$out" in *'"state":"running"'*) [ "$now" != "$since" ] || fail "fail2ban did not restart: $out" ;; *) fail "fail2ban did not come back: $out" ;; esac
+out=$(api POST /api/bans '{"jail":"app","ip":"203.0.113.10"}')
+case "$out" in 204*) ;; *) fail "ban by hand: $out" ;; esac
+wait_for '203.0.113.10' docker exec "$name" iptables -S f2b-app
+wait_for 'multiport' docker exec "$name" iptables -S INPUT
+api DELETE '/api/bans/203.0.113.10?jail=app' >/dev/null
 
 echo "==> a jail fail2ban refuses is refused, and not written"
 out=$(api PUT /api/files/jails/bad.local '{"content":"[bad]\nenabled = true\nfilter = nosuchfilter\nlogpath = /logs/app.log\n","version":""}')

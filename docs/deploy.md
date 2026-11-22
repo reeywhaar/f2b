@@ -86,6 +86,13 @@ check leaves the file saved and says so; fail2ban carries on as it was.
 fail2ban reads a filter only when a jail uses it, so a broken filter no jail names yet passes the
 check, and is refused when a jail first names it.
 
+A reload that leaves a jail without the actions configured for it is followed by a restart.
+fail2ban 1.1's reload drops an action a jail gains under a new name, as changing its `banaction`
+does, and its bans then go unenforced; a restart starts the action and puts the bans back from the
+database. After a save of a jail or a setting, the engine compares each running jail's actions with
+what `fail2ban-client -d` says the configuration gives it, and the reply's `reload.output` says when
+it restarted.
+
 A rename is the same, with more in it: the file under its new name, the old name gone, and, when
 asked, every jail file that names it changed to name the new one. A jail names a filter or an
 action by its file's name, so renaming one alone would leave the jail naming nothing, which

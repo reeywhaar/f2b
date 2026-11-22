@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -32,6 +33,25 @@ func (p Programs) Check(ctx context.Context, dir string) Result {
 
 func (p Programs) Reload(ctx context.Context, dir string) Result {
 	return run(ctx, reloadTimeout, p.Client, "-c", dir, "reload")
+}
+
+func (p Programs) Actions(ctx context.Context, dir string) (map[string][]string, error) {
+	res := run(ctx, checkTimeout, p.Client, "-c", dir, "-d")
+	if !res.OK {
+		return nil, fmt.Errorf("reading the actions the configuration gives each jail: %s", res.Output)
+	}
+	return actionsIn(res.Output), nil
+}
+
+// addaction is a jail given an action, in the commands fail2ban-client -d prints.
+var addaction = regexp.MustCompile(`(?m)^\['set', '([^']+)', 'addaction', '([^']+)'`)
+
+func actionsIn(dump string) map[string][]string {
+	out := map[string][]string{}
+	for _, m := range addaction.FindAllStringSubmatch(dump, -1) {
+		out[m[1]] = append(out[m[1]], m[2])
+	}
+	return out
 }
 
 // Regex runs without resolving names: a tester waiting on DNS for each host it matched is a

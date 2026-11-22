@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -144,11 +145,12 @@ func TestSectionsNameTheJailsInAFile(t *testing.T) {
 	}
 }
 
-// stubDaemon is a running fail2ban that remembers being restarted.
+// stubDaemon is a running fail2ban that remembers being restarted, with the actions it is given.
 type stubDaemon struct {
 	mu       sync.Mutex
 	state    string
 	restarts int
+	actions  map[string][]string
 }
 
 func (d *stubDaemon) State() DaemonState {
@@ -163,13 +165,21 @@ func (d *stubDaemon) Jails(context.Context) ([]Jail, error) {
 func (d *stubDaemon) Banned(context.Context) (map[string][]string, error) { return nil, nil }
 func (d *stubDaemon) Ban(context.Context, string, string) error           { return nil }
 func (d *stubDaemon) Unban(context.Context, string, string) error         { return nil }
+func (d *stubDaemon) Actions(context.Context) (map[string][]string, error) {
+	return d.actions, nil
+}
 
-// stubTools refuses any configuration with "bad" in a filter, counts reloads, and keeps the log
-// the tester was last given.
+// stubTools refuses any configuration with "bad" in a filter, counts reloads, keeps the log the
+// tester was last given, and configures the actions it is given.
 type stubTools struct {
 	mu      sync.Mutex
 	reloads int
 	sample  string
+	actions map[string][]string
+}
+
+func (s *stubTools) Actions(context.Context, string) (map[string][]string, error) {
+	return s.actions, nil
 }
 
 func (s *stubTools) Check(_ context.Context, dir string) Result {
@@ -251,6 +261,48 @@ func TestASaveWritesComposesAndReloads(t *testing.T) {
 	}
 	if tools.reloads != 1 {
 		t.Fatalf("reloaded %d times", tools.reloads)
+	}
+}
+
+func TestAReloadThatLeavesAJailWithoutItsActionsRestartsFail2ban(t *testing.T) {
+	s, d, tools, _ := server(t)
+	tools.actions = map[string][]string{"app": {"iptables-allports"}, "sshd": {"iptables-allports"}}
+	d.actions = map[string][]string{"app": {}, "sshd": {"iptables-allports"}}
+	code, out := do(t, s, "PUT", "/api/files/jails/app.local", `{"content":"[app]","version":""}`)
+	if code != http.StatusOK || tools.reloads != 1 || d.restarts != 1 {
+		t.Fatalf("%d, %d reloads, %d restarts: %v", code, tools.reloads, d.restarts, out)
+	}
+	if reload, _ := out["reload"].(map[string]any); !strings.Contains(reload["output"].(string), "app without the actions configured") {
+		t.Fatalf("the reply does not say why: %v", out)
+	}
+	d.actions = tools.actions
+	do(t, s, "PUT", "/api/files/jails/app.local", `{"content":"[app]\n","version":"`+VersionOf("[app]")+`"}`)
+	if d.restarts != 1 {
+		t.Fatal("restarted although every jail has the actions configured")
+	}
+}
+
+func TestOnlyASaveOfAJailOrASettingLooksAtTheActions(t *testing.T) {
+	s, d, tools, _ := server(t)
+	tools.actions = map[string][]string{"app": {"iptables-allports"}}
+	d.actions = map[string][]string{"app": {}}
+	do(t, s, "PUT", "/api/files/filters/app.local", `{"content":"good","version":""}`)
+	if d.restarts != 0 {
+		t.Fatal("a filter's save restarted fail2ban")
+	}
+}
+
+func TestTheActionsAJailIsGivenAreReadFromFail2bansDump(t *testing.T) {
+	dump := `['set', 'sshd', 'addaction', 'iptables-allports']
+['multi-set', 'sshd', 'action', 'iptables-allports', [['actionstart', "for proto in $(echo 'all'); do"]]]
+['set', 'web', 'addaction', 'iptables-multiport-Docker']
+['set', 'web', 'addaction', 'sendmail-whois']
+['start', 'web']
+`
+	got := actionsIn(dump)
+	want := map[string][]string{"sshd": {"iptables-allports"}, "web": {"iptables-multiport-Docker", "sendmail-whois"}}
+	if !maps.EqualFunc(got, want, slices.Equal) {
+		t.Fatalf("got %v", got)
 	}
 }
 
