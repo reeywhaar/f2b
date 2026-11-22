@@ -18,8 +18,11 @@ logpath   = /remotelogs/docker/${b}.log
 maxretry  = 5
 findtime  = 10m
 bantime   = 1d
-# A published container's traffic passes DOCKER-USER, not INPUT.
-banaction = iptables-allports[chain=DOCKER-USER]
+# A published container's traffic passes DOCKER-USER, not INPUT, and HTTP/3 comes over UDP.
+# Keys of the jail: chain=… in banaction's brackets is overridden.
+banaction = iptables-allports
+chain     = DOCKER-USER
+protocol  = all
 `;
     case "filters":
       if (stock?.filters.includes(`${b}.conf`)) {

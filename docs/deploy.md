@@ -45,15 +45,25 @@ journal: the engine has no systemd, and sshd's jail reads the file rsyslog write
 ## A published container's traffic is banned in DOCKER-USER
 
 A connection to a port Docker publishes never passes `INPUT`, so a ban there does not stop it.
-Ban in `DOCKER-USER`, the chain Docker leaves for this, and ban every port, so somebody refused at
-one service does not carry on at the next:
+Ban in `DOCKER-USER`, the chain Docker leaves for this; ban every port, so somebody refused at one
+service does not carry on at the next; and ban every protocol, because Caddy serves HTTP/3 on UDP
+443, and a browser that has used it once keeps to it:
 
 ```ini
-banaction = iptables-allports[chain=DOCKER-USER]
+# jail.local
+[DEFAULT]
+banaction = iptables-allports
+chain     = DOCKER-USER
+protocol  = all
 ```
 
-sshd, which is not in a container, is banned in `INPUT` as usual: `banaction =
-iptables-allports`.
+`chain` and `protocol` are keys of the jail, not options of the action:
+`iptables-allports[chain=DOCKER-USER]` is undone without a word, because jail.conf hands every
+action `chain` and `protocol` after it, `INPUT` and `tcp` unless the jail sets them. `all` takes
+an allports action; one naming ports takes `protocol = tcp,udp`, as iptables refuses `-p all`
+with them.
+
+sshd, which is not in a container, is banned in `INPUT`: `chain = INPUT` in its jail.
 
 ## What fail2ban runs with is composed, and nothing in /data/fail2ban is overwritten
 
@@ -150,7 +160,9 @@ ignoreregex =
 enabled   = true
 filter    = f2b
 logpath   = /remotelogs/docker/f2b-web.log
-banaction = iptables-allports[chain=DOCKER-USER]
+banaction = iptables-allports
+chain     = DOCKER-USER
+protocol  = all
 maxretry  = 5
 bantime   = 1d
 ```

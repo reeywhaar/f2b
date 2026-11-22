@@ -91,15 +91,19 @@ ignoreip  = 127.0.0.1/8 ::1 198.51.100.10
 bantime   = 1d
 findtime  = 10m
 maxretry  = 5
-# Published containers' traffic passes DOCKER-USER, not INPUT.
-banaction = iptables-allports[chain=DOCKER-USER]
+# Published containers' traffic passes DOCKER-USER, not INPUT, and HTTP/3 comes over UDP.
+# Keys of the jail: chain=… in banaction's brackets is overridden.
+banaction = iptables-allports
+chain     = DOCKER-USER
+protocol  = all
 `,
 		"jails/sshd.local": `[sshd]
 enabled   = true
 mode      = aggressive
 port      = ssh
 logpath   = ` + logs + `/auth.log
-banaction = iptables-allports
+# sshd is the host's, not a container's.
+chain     = INPUT
 bantime   = 1h
 `,
 		"jails/scanners.local": `# Anything asking for WordPress, phpMyAdmin or a .git directory.
