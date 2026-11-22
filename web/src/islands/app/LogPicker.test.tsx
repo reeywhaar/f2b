@@ -15,7 +15,17 @@ vi.mock("@app/api/actions", () => ({
   getLogFiles: () => getLogFiles(),
 }));
 
-afterEach(() => vi.clearAllMocks());
+afterEach(async () => {
+  vi.clearAllMocks();
+  // A close takes the picker's steps back off the history a moment later, and one left open
+  // leaves its steps there: either would land in the next test, on its picker.
+  await new Promise((r) => setTimeout(r, 20));
+  const left = window.history.state?.f2bLogPicker;
+  if (left) window.history.go(-left);
+  await waitFor(() =>
+    expect(window.history.state?.f2bLogPicker).toBeUndefined(),
+  );
+});
 
 const jail = (name: string, logs: string[]): Jail =>
   ({ name, logs, filter: name }) as Jail;
@@ -126,6 +136,51 @@ describe("the log picker", () => {
     expect(screen.queryByText("/srv/restic.log")).toBeNull();
     fireEvent.keyDown(find, { key: "Enter" });
     expect(onChange).toHaveBeenCalledWith("/var/log/backup/restic.log");
+  });
+
+  it("goes up a directory on the browser's Back, and out of the dialog from the top", async () => {
+    getLogsByPath.mockImplementation(async (p: string) =>
+      p === "/var/log"
+        ? {
+            entry: entry("/var/log", true),
+            entries: [entry("/var/log/nginx", true), entry("/var/log/syslog")],
+            more: false,
+          }
+        : {
+            entry: entry(p, true),
+            entries: [entry("/var/log/nginx/access.log")],
+            more: false,
+          },
+    );
+    const page = window.location.pathname;
+    open();
+    fireEvent.click(await screen.findByText("/var/log"));
+    fireEvent.click(await screen.findByText("nginx"));
+    expect(await screen.findByText("access.log")).toBeTruthy();
+
+    window.history.back();
+    expect(await screen.findByText("syslog")).toBeTruthy();
+    window.history.back();
+    expect(await screen.findByText("Log directories")).toBeTruthy();
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(window.location.pathname).toBe(page);
+  });
+
+  it("closed another way, takes its steps back off", async () => {
+    getLogsByPath.mockResolvedValue({
+      entry: entry("/var/log", true),
+      entries: [entry("/var/log/syslog")],
+      more: false,
+    });
+    open();
+    fireEvent.click(await screen.findByText("/var/log"));
+    await screen.findByText("syslog");
+    expect(window.history.state?.f2bLogPicker).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(window.history.state?.f2bLogPicker).toBeUndefined(),
+    );
   });
 
   it("takes a path typed, or lines pasted", async () => {

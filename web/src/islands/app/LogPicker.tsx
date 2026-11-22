@@ -1,4 +1,10 @@
-import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getLogFiles, getLogs, getLogsByPath } from "@app/api/actions";
@@ -42,13 +48,27 @@ export function LogPicker({
   const readers = useMemo(() => readersOf(jails), [jails]);
   const by = readers.get(value) ?? [];
 
+  // Opening is a step in the browser's history, and so is each directory gone into: Back goes up
+  // a directory, as it would through folders, and out of the dialog from the top, rather than off
+  // the page the dialog is on. Closed any other way, it takes its steps back off, so Back after it
+  // is what it was before.
+  const show = () => {
+    window.history.pushState({ [stepKey]: 1, place: null }, "");
+    setOpen(true);
+  };
+  const close = () => {
+    const taken = stepOf(window.history.state);
+    if (taken) window.history.go(-taken);
+    setOpen(false);
+  };
+
   return (
     <>
       <button
         type="button"
         aria-label={`Lines from: ${value === PASTED ? "lines pasted here" : value}`}
         aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
+        onClick={show}
         className={`${fieldLook} ${fieldHeight} inline-flex items-center gap-2 text-left text-base sm:text-sm ${className}`}
       >
         <span className="min-w-0 flex-1 truncate">
@@ -65,19 +85,15 @@ export function LogPicker({
         </span>
         <ChevronDownIcon className="shrink-0 text-muted" />
       </button>
-      <Dialog
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Lines from"
-        wide
-      >
+      <Dialog open={open} onClose={close} title="Lines from" wide>
         <Browser
           value={value}
           readers={readers}
           choose={(v) => {
-            setOpen(false);
+            close();
             if (v !== value) onChange(v);
           }}
+          backedOut={() => setOpen(false)}
         />
       </Dialog>
     </>
@@ -96,21 +112,51 @@ function readersOf(jails: Jail[]): Map<string, string[]> {
 /** Where a directory is, from the top: the place it is in, then each directory down to it. */
 type Place = { root: string; dir: string };
 
+/** The key the picker's steps carry in the browser's history: how many steps in this one is. */
+const stepKey = "f2bLogPicker";
+
+const stepOf = (state: unknown): number =>
+  typeof state === "object" && state !== null && stepKey in state
+    ? Number((state as Record<string, unknown>)[stepKey]) || 0
+    : 0;
+
 function Browser({
   value,
   readers,
   choose,
+  backedOut,
 }: {
   value: string;
   readers: Map<string, string[]>;
   choose: (value: string) => void;
+  /** Back went past the dialog's first step: it is closed, and its steps are gone already. */
+  backedOut: () => void;
 }) {
   const [find, setFind] = useState("");
   const [at, setAt] = useState<Place | null>(null);
+  // Every move is a step, up a crumb as well as down a directory: Back is where you were.
   const go = (p: Place | null) => {
+    window.history.pushState(
+      { [stepKey]: stepOf(window.history.state) + 1, place: p },
+      "",
+    );
     setAt(p);
     setFind("");
   };
+  // Back and Forward among the steps: each carries its place.
+  useEffect(() => {
+    const moved = () => {
+      const state = window.history.state as { place?: Place | null } | null;
+      if (!stepOf(state)) {
+        backedOut();
+        return;
+      }
+      setAt(state?.place ?? null);
+      setFind("");
+    };
+    window.addEventListener("popstate", moved);
+    return () => window.removeEventListener("popstate", moved);
+  }, [backedOut]);
   // Each view draws the field, as each knows what Enter takes: the first row it shows.
   const search: Search = (placeholder, enter) => (
     <SearchField
