@@ -18,6 +18,7 @@ import { DummyRows } from "@app/components/Dummy";
 import { Frame } from "@app/components/Frame";
 import { Panel } from "@app/components/Panel";
 import { ago, count, span } from "@app/format";
+import { Address } from "@app/islands/app/Address";
 import { Link } from "@app/islands/app/Link";
 import { paths, ranges } from "@app/islands/app/route";
 import { StateDot, stateWords } from "@app/islands/app/state";
@@ -119,13 +120,8 @@ export function Overview({ days }: { days: number }) {
               <tbody>
                 {stats.data.top.map((o) => (
                   <tr key={o.ip} className="border-t border-line">
-                    <td className="py-1.5 pr-4 font-mono text-xs">
-                      <Link
-                        href={paths.history({ ip: o.ip })}
-                        className="hover:underline"
-                      >
-                        {o.ip}
-                      </Link>
+                    <td className="py-1.5 pr-4 text-xs">
+                      <Address ip={o.ip} href={paths.history({ ip: o.ip })} />
                     </td>
                     <td className="py-1.5 pr-4 text-right">{count(o.bans)}</td>
                     <td className="py-1.5 pr-4 text-muted">

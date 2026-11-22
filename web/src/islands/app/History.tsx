@@ -12,6 +12,7 @@ import { Picker } from "@app/components/Picker";
 import { SearchField } from "@app/components/SearchField";
 import { useDebounced } from "@app/debounce";
 import { dateTime, span } from "@app/format";
+import { Address } from "@app/islands/app/Address";
 import { go, paths } from "@app/islands/app/route";
 
 /**
@@ -112,15 +113,12 @@ export function History({ jail, ip }: { jail: string; ip: string }) {
                       {dateTime(b.at)}
                       <span className="sm:hidden"> · {lasted(b)}</span>
                     </span>
-                    <button
-                      type="button"
-                      className="font-mono text-sm hover:underline"
-                      onClick={() =>
-                        go(paths.history({ jail, ip: b.ip }), true)
-                      }
-                    >
-                      {b.ip}
-                    </button>
+                    <Address
+                      ip={b.ip}
+                      href={paths.history({ jail, ip: b.ip })}
+                      replace
+                      className="text-sm"
+                    />
                     <button
                       type="button"
                       className="rounded bg-fill px-1.5 py-0.5 text-xs hover:bg-control-hover"

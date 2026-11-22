@@ -16,7 +16,7 @@ import { Picker } from "@app/components/Picker";
 import { SearchField } from "@app/components/SearchField";
 import { TextField } from "@app/components/TextField";
 import { ago, dateTime, span, until } from "@app/format";
-import { Link } from "@app/islands/app/Link";
+import { Address } from "@app/islands/app/Address";
 import { paths } from "@app/islands/app/route";
 
 /** Every ban in force, a way to lift each, and a way to add one. */
@@ -104,12 +104,11 @@ function Row({ ban }: { ban: CurrentBan }) {
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-(--h-padding) py-3">
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
+          <Address
+            ip={ban.ip}
             href={paths.history({ ip: ban.ip })}
-            className="font-mono text-sm font-medium hover:underline"
-          >
-            {ban.ip}
-          </Link>
+            className="text-sm font-medium"
+          />
           <span className="rounded bg-fill px-1.5 py-0.5 text-xs">
             {ban.jail}
           </span>
