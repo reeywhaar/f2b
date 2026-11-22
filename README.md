@@ -8,7 +8,8 @@ the browser; a change is tried on fail2ban before it is saved, and fail2ban relo
 - **A save fail2ban would refuse is refused**, with fail2ban's own words, and nothing is written.
   One it accepts is written, and fail2ban reloads, keeping its bans.
 - **Try a filter on a log** before saving it: fail2ban-regex over the end of a log a jail reads,
-  any file the engine can read, or lines pasted in.
+  any other in the log directories mounted into the engine, rotated `.gz` ones too, picked from
+  a list you can search and go through, or lines pasted in.
 - **fail2ban's own filters and actions**, to read and to override in one press.
 - **Who is banned now**, where, since when and until when, and the log lines that did it. Lift
   a ban, or ban an address or a range by hand.

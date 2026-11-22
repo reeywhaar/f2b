@@ -130,6 +130,7 @@ func runEngine() error {
 		Log:      log,
 		Live:     sup.Dir,
 		Scratch:  filepath.Join(app.RunDir, "scratch"),
+		Logs:     engine.LogPlaces{Mounts: engine.ReadOnlyMounts(), Data: l.Data},
 	}
 	sup.Prepare = srv.PrepareLive
 
@@ -137,7 +138,7 @@ func runEngine() error {
 	defer stop()
 	var background sync.WaitGroup
 	background.Go(func() { sup.Run(ctx) })
-	log.Info("f2b engine started", "version", app.Version, "data", l.Data, "socket", l.Socket)
+	log.Info("f2b engine started", "version", app.Version, "data", l.Data, "socket", l.Socket, "logs", srv.Logs.Mounts)
 	err = serveSocket(ctx, l.Socket, srv.Handler(), log)
 	stop()
 	// fail2ban takes its rules down on the way out; waited for, so the container does not stop

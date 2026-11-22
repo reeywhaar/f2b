@@ -71,8 +71,15 @@ export function count(n: number): string {
   return counts.format(n);
 }
 
-/** Bytes, for a file's size. */
+/** Bytes, for a file's size: a filter in bytes, a log in gigabytes. */
 export function size(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB`;
+  const scale = ["KB", "MB", "GB", "TB"];
+  let n = bytes / 1024;
+  let i = 0;
+  while (n >= 1024 && i < scale.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(n < 10 ? 1 : 0)} ${scale[i]}`;
 }

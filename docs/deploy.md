@@ -42,6 +42,14 @@ The stock jails' `%(sshd_log)s` is `/var/log/auth.log`, from fail2ban's `paths-d
 logging sshd elsewhere sets `sshd_log` in `paths-overrides.local`, under Settings. There is no
 journal: the engine has no systemd, and sshd's jail reads the file rsyslog writes.
 
+Read-only is also how the engine tells a log directory from the rest of its container. The filter
+tester, and the list of logs it picks from, read only what is mounted read-only and the
+directories the running jails read logs in, and never `/data`: the tester can read any file it is
+pointed at, an API token that only reads may point it, and `/data` holds the session key and the
+tokens. The engine finds the mounts in `/proc/self/mountinfo` at start, and logs them; it leaves
+out the kernel's, `/run/secrets`, and anything that is `/data` or holds it. A log mounted
+read-write is still read by its jail, and the tester reaches it where a jail reads it.
+
 ## A published container's traffic is banned in DOCKER-USER
 
 A connection to a port Docker publishes never passes `INPUT`, so a ban there does not stop it.

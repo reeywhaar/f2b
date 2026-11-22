@@ -19,4 +19,6 @@ export const qk = {
     ["files", kind, name, "references"] as const,
   stock: ["stock"] as const,
   stockFile: (path: string) => ["stock", path] as const,
+  logs: ["logs"] as const,
+  logDir: (path: string) => ["logs", path] as const,
 };

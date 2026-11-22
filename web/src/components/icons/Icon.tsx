@@ -180,3 +180,16 @@ export const MoonIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
   </Icon>
 );
+
+export const FolderIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2h8A1.5 1.5 0 0 1 20.5 9v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z" />
+  </Icon>
+);
+
+export const FileIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M6.5 3.5h7l4 4v13h-11z" />
+    <path d="M13.5 3.5v4h4M9 12h6M9 15.5h6" />
+  </Icon>
+);

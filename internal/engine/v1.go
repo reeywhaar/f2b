@@ -49,6 +49,8 @@ func (s *Server) v1Routes() []v1Route {
 		// Both change nothing: trying a filter or a file is inspecting it.
 		{"POST", "/api/v1/config-checks", false, s.v1Check},
 		{"POST", "/api/v1/regex-tests", false, s.v1Regex},
+		{"GET", "/api/v1/log-files", false, s.v1LogFiles},
+		{"GET", "/api/v1/log-files/{path...}", false, s.v1LogFile},
 		{"GET", "/api/v1/stock", false, s.v1Stock},
 		{"GET", "/api/v1/stock/{path...}", false, s.v1StockFile},
 		{"GET", "/api/v1/log", false, s.v1Log},
@@ -637,6 +639,45 @@ func (s *Server) v1StockFile(w http.ResponseWriter, r *http.Request) {
 		Attributes: map[string]any{"path": p, "content": content},
 		Links:      &links{Self: "/api/v1/stock/" + p},
 	}})
+}
+
+// The logs the engine can read: the places, or what is in one directory of them.
+
+func logResource(e LogEntry) resource {
+	return resource{Type: "log-files", ID: e.Path, Attributes: e, Links: self(append([]string{"log-files"}, strings.Split(strings.TrimPrefix(e.Path, "/"), "/")...)...)}
+}
+
+func (s *Server) v1LogFiles(w http.ResponseWriter, r *http.Request) {
+	var list []LogEntry
+	var meta map[string]any
+	if dir := r.URL.Query().Get("filter[dir]"); dir != "" {
+		_, entries, more, err := s.logDir(r.Context(), dir)
+		if err != nil {
+			s.failDoc(w, r, err)
+			return
+		}
+		list, meta = entries, map[string]any{"more": more}
+	} else {
+		list, _ = s.logRoots(r.Context())
+	}
+	data := make([]resource, 0, len(list))
+	for _, e := range list {
+		data = append(data, logResource(e))
+	}
+	doc := document{Data: data, Links: &links{Self: "/api/v1/log-files"}}
+	if meta != nil {
+		doc.Meta = meta
+	}
+	writeDoc(w, http.StatusOK, doc)
+}
+
+func (s *Server) v1LogFile(w http.ResponseWriter, r *http.Request) {
+	entry, _, _, err := s.logDir(r.Context(), "/"+r.PathValue("path"))
+	if err != nil {
+		s.failDoc(w, r, err)
+		return
+	}
+	writeDoc(w, http.StatusOK, document{Data: logResource(entry)})
 }
 
 // The log, followed by page[after] from where the last page ended.

@@ -1,11 +1,9 @@
 package engine
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -38,7 +36,9 @@ type Server struct {
 	// Live is the configuration fail2ban runs with; Scratch is where a change is tried first.
 	Live    string
 	Scratch string
-	Now     func() time.Time
+	// Logs are where logs are read from, for the tester and the list of them.
+	Logs LogPlaces
+	Now  func() time.Time
 
 	// mu holds one change to the configuration at a time, from the first check to the reload.
 	mu  sync.Mutex
@@ -70,6 +70,8 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/stock", s.stockList)
 	m.HandleFunc("GET /api/stock/{path...}", s.stockFile)
 	m.HandleFunc("POST /api/regex", s.regex)
+	m.HandleFunc("GET /api/logs", s.logRootList)
+	m.HandleFunc("GET /api/logs/{path...}", s.logEntry)
 	m.HandleFunc("GET /api/log", s.log)
 	s.handleV1(m)
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -753,7 +755,11 @@ func (s *Server) runRegex(ctx context.Context, req RegexRequest) (RegexResult, e
 	case req.Log != "" && req.Text != "":
 		err = invalid("a log file or lines, not both")
 	case req.Log != "":
-		err = copyTail(req.Log, sample, lines)
+		var f *os.File
+		if f, err = s.openLog(ctx, req.Log); err == nil {
+			err = copyTail(f, sample, lines)
+			f.Close()
+		}
 	case req.Text != "":
 		err = os.WriteFile(sample, []byte(pasted(req.Text)), 0o644)
 	default:
@@ -780,47 +786,6 @@ func pasted(text string) string {
 		text += "\n"
 	}
 	return text
-}
-
-// copyTail copies the last n lines of a log, so a tester run over a log of gigabytes reads what
-// it was asked to.
-func copyTail(from, to string, n int) error {
-	if !filepath.IsAbs(from) {
-		return invalid("%q is not an absolute path", from)
-	}
-	info, err := os.Stat(from)
-	if err != nil {
-		return invalid("%s cannot be read here: %v", from, errors.Unwrap(err))
-	}
-	if !info.Mode().IsRegular() {
-		return invalid("%s is not a file", from)
-	}
-	f, err := os.Open(from)
-	if err != nil {
-		return invalid("%s cannot be read here: %v", from, errors.Unwrap(err))
-	}
-	defer f.Close()
-	// Enough for n lines of a busy access log; a log of longer lines yields fewer.
-	window := int64(n) * 1024
-	off := max(info.Size()-window, 0)
-	if _, err := f.Seek(off, io.SeekStart); err != nil {
-		return err
-	}
-	b, err := io.ReadAll(io.LimitReader(f, window))
-	if err != nil {
-		return err
-	}
-	// Started mid-line: the first is a piece of one.
-	if off > 0 {
-		if i := bytes.IndexByte(b, '\n'); i >= 0 {
-			b = b[i+1:]
-		}
-	}
-	all := bytes.Split(bytes.TrimRight(b, "\n"), []byte("\n"))
-	if len(all) > n {
-		all = all[len(all)-n:]
-	}
-	return os.WriteFile(to, append(bytes.Join(all, []byte("\n")), '\n'), 0o644)
 }
 
 func (s *Server) log(w http.ResponseWriter, r *http.Request) {

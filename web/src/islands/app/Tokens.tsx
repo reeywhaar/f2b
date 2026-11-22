@@ -34,7 +34,7 @@ const lifetimes: { value: Lifetime; label: string; seconds: number }[] = [
 
 /** A lifetime in the words it was chosen in: "90 days", not "12w 6d". */
 function named(seconds: number): string {
-  const l = lifetimes.find((l) => l.seconds === seconds);
+  const l = lifetimes.find((x) => x.seconds === seconds);
   return l ? l.label.toLowerCase() : span(seconds);
 }
 

@@ -18,6 +18,7 @@ One name per thing, in identifiers, the API, the docs and the interface.
 | file | one edited file, of a kind, by name | `File`, `Files` |
 | stock | fail2ban's own configuration, as its package installed it | `Stock`, `StockDir` |
 | composed | the directory fail2ban runs with, built from stock and the files | `Composer`, `Live` |
+| logs | what the engine reads logs from: its read-only mounts and the jails' log directories | `LogPlaces`, `log-files` |
 | ban | an address kept out by a jail, now or in the history | `Ban`, `bans` |
 | version | a hash of a file's content, which a save is made against | `Version`, `VersionOf` |
 | token | an API token: what a script or an agent sends to /api/v1 instead of the password | `Token`, `Tokens` |

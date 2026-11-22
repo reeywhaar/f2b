@@ -10,12 +10,13 @@ import { Heading } from "@app/components/Heading";
 import { Select } from "@app/components/Select";
 import { TextField, fieldLook } from "@app/components/TextField";
 import { count } from "@app/format";
+import { LogPicker, PASTED } from "@app/islands/app/LogPicker";
 
 const lineCounts = [500, 2000, 10000];
 
 /**
  * fail2ban-regex over the filter as it is in the editor, saved or not: against the end of a log
- * a jail reads, any other file the engine can read, or lines pasted here.
+ * a jail reads, any other among the logs the engine reads, or lines pasted here.
  */
 export function RegexTester({
   file,
@@ -27,27 +28,18 @@ export function RegexTester({
   const jails = useQuery({ queryKey: qk.jails, queryFn: getJails });
   const bare = file.replace(/\.(local|conf)$/, "");
   const [filter, setFilter] = useState(bare);
-  // A log's path, "other" for one typed, or "text" for lines pasted.
+  // A log's path, or PASTED for lines pasted.
   const [source, setSource] = useState("");
-  const [path, setPath] = useState("");
   const [text, setText] = useState("");
   const [lines, setLines] = useState(2000);
 
-  const logs = [
-    ...new Set(
-      (jails.data?.jails ?? []).flatMap((j) => j.logs.map((l) => `${l}`)),
-    ),
-  ];
-  const usedBy = (log: string) =>
-    (jails.data?.jails ?? [])
-      .filter((j) => j.logs.includes(log))
-      .map((j) => j.name);
+  const all = jails.data?.jails ?? [];
   // The log of a jail that uses this filter, if one does.
   const picked =
     source ||
-    (jails.data?.jails.find((j) => j.filter === bare)?.logs[0] ??
-      logs[0] ??
-      "text");
+    (all.find((j) => j.filter === bare)?.logs[0] ??
+      all.find((j) => j.logs.length)?.logs[0] ??
+      PASTED);
 
   const run = useMutation({
     mutationFn: () =>
@@ -56,9 +48,7 @@ export function RegexTester({
         file,
         content,
         lines,
-        ...(picked === "text"
-          ? { text }
-          : { log: picked === "other" ? path.trim() : picked }),
+        ...(picked === PASTED ? { text } : { log: picked }),
       }),
   });
 
@@ -78,21 +68,14 @@ export function RegexTester({
         <Fields>
           <Field
             label="Lines from"
-            hint="The end of a log a running jail reads, another file the engine can read, or lines pasted here. The filter is what is in the editor, saved or not."
+            hint="The end of a log a running jail reads, any other in the directories the engine reads logs from, or lines pasted here. The filter is what is in the editor, saved or not."
           >
-            <Select
+            <LogPicker
               className="w-full"
               value={picked}
-              onChange={(e) => setSource(e.target.value)}
-            >
-              {logs.map((l) => (
-                <option key={l} value={l}>
-                  {l} ({usedBy(l).join(", ")})
-                </option>
-              ))}
-              <option value="other">Another file…</option>
-              <option value="text">Lines pasted here</option>
-            </Select>
+              onChange={setSource}
+              jails={all}
+            />
           </Field>
           <Field
             label="Filter"
@@ -104,20 +87,7 @@ export function RegexTester({
               onChange={(e) => setFilter(e.target.value)}
             />
           </Field>
-          {picked === "other" ? (
-            <Field
-              label="File"
-              hint="A path inside the engine's container, such as /remotelogs/docker/caddy.log."
-            >
-              <TextField
-                className="w-full font-mono"
-                placeholder="/var/log/auth.log"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-              />
-            </Field>
-          ) : null}
-          {picked !== "text" ? (
+          {picked !== PASTED ? (
             <Field label="How many" hint="From the end of the log.">
               <Select
                 className="w-full"
@@ -133,7 +103,7 @@ export function RegexTester({
             </Field>
           ) : null}
         </Fields>
-        {picked === "text" ? (
+        {picked === PASTED ? (
           <textarea
             aria-label="Lines to try"
             className={`${fieldLook} min-h-32 w-full py-2 font-mono text-xs`}

@@ -76,6 +76,24 @@ export type Applied = { file: File | null; also: FileRef[]; reload: Result };
 
 export type Stock = { filters: string[]; actions: string[]; other: string[] };
 
+/**
+ * A directory or a file among the logs the engine reads: what is mounted into it read-only, and
+ * where the running jails read theirs.
+ */
+export type LogEntry = {
+  name: string;
+  path: string;
+  dir: boolean;
+  size: number;
+  modified: number;
+  /** The running jails that read it. */
+  jails: string[];
+  /** On a place logs are read from only: why it is one. */
+  source?: "mount" | "jail";
+};
+
+export type LogDir = { entry: LogEntry; entries: LogEntry[]; more: boolean };
+
 /** What an API token may do on /api/v1. */
 export type Scope = "read" | "write";
 

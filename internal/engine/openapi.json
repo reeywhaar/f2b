@@ -35,6 +35,9 @@
       "name": "tools"
     },
     {
+      "name": "logs"
+    },
+    {
       "name": "stock"
     },
     {
@@ -1329,7 +1332,7 @@
                           },
                           "log": {
                             "type": "string",
-                            "description": "A log the engine can read, absolute; or text."
+                            "description": "A file among log-files, absolute; one ending .gz is read through. Or text."
                           },
                           "text": {
                             "type": "string",
@@ -1361,6 +1364,127 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/log-files": {
+      "get": {
+        "operationId": "listLogFiles",
+        "summary": "The logs the engine can read: where they are, or what is in one directory",
+        "tags": [
+          "logs"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Without filter[dir], the places logs are read from; with it, that directory's directories and files, directories first.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LogFile"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "more": {
+                          "type": "boolean",
+                          "description": "With filter[dir]: the directory held more than were listed."
+                        }
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "description": "Logs are read from what is mounted into the engine read-only and from where the running jails read theirs, never from its data directory. regex-tests reads only these.",
+        "parameters": [
+          {
+            "name": "filter[dir]",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "A directory among the logs, absolute."
+          }
+        ]
+      }
+    },
+    "/api/v1/log-files/{path}": {
+      "get": {
+        "operationId": "getLogFile",
+        "summary": "One directory or file among the logs",
+        "tags": [
+          "logs"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "It.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LogFile"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Its absolute path without the first slash, its slashes not escaped: var/log/auth.log."
+          }
+        ]
       }
     },
     "/api/v1/stock": {
@@ -2270,6 +2394,65 @@
               "content": {
                 "type": "string",
                 "description": "Only where one file is asked for."
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "LogFile": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "log-files"
+          },
+          "id": {
+            "type": "string",
+            "description": "Its path."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Its name; for a place logs are read from, its path."
+              },
+              "path": {
+                "type": "string",
+                "description": "Absolute, in the engine's container."
+              },
+              "dir": {
+                "type": "boolean"
+              },
+              "size": {
+                "type": "integer",
+                "description": "Bytes; 0 for a directory."
+              },
+              "modified": {
+                "type": "integer",
+                "description": "Unix seconds."
+              },
+              "jails": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The running jails that read it."
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "mount",
+                  "jail"
+                ],
+                "description": "On a place logs are read from only: mount, a read-only mount; jail, where a running jail reads a log."
               }
             }
           },

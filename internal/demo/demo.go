@@ -8,6 +8,7 @@
 package demo
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -126,6 +127,9 @@ func New(ctx context.Context, l app.Layout, log *slog.Logger) (http.Handler, err
 		Log:      log,
 		Live:     live,
 		Scratch:  filepath.Join(run, "scratch"),
+		// The demo's jails read logs in its data directory; whatever is mounted into its container
+		// read-only is listed beside them, as the engine lists it.
+		Logs: engine.LogPlaces{Mounts: engine.ReadOnlyMounts(), Data: l.Data},
 	}
 	return srv.Handler(), nil
 }
@@ -211,21 +215,27 @@ func seed(d *daemon, js []jail, r *rand.Rand, database string) error {
 	}
 
 	for _, j := range js {
-		var b strings.Builder
-		for i := 300; i > 0; i-- {
-			t := now.Add(-time.Duration(i) * 3 * time.Minute)
-			if r.IntN(5) == 0 {
-				ip := address(r)
-				for range 3 {
-					fmt.Fprintln(&b, j.line(t, ip, r))
-				}
-				continue
-			}
-			fmt.Fprintln(&b, background(j, t, r))
-		}
-		if err := os.WriteFile(j.log, []byte(b.String()), 0o644); err != nil {
+		if err := os.WriteFile(j.log, []byte(logOf(j, now, r)), 0o644); err != nil {
 			return err
 		}
+		// Yesterday's, rotated, as logrotate leaves it: something to try a filter on that no
+		// jail reads.
+		if err := writeGzip(j.log+".1.gz", logOf(j, now.Add(-24*time.Hour), r)); err != nil {
+			return err
+		}
+	}
+	// A log of something no jail watches, a directory down.
+	backup := filepath.Join(filepath.Dir(js[0].log), "backup", "restic.log")
+	if err := os.MkdirAll(filepath.Dir(backup), 0o755); err != nil {
+		return err
+	}
+	var b strings.Builder
+	for i := 30; i > 0; i-- {
+		t := now.Add(-time.Duration(i) * 24 * time.Hour).Format(time.RFC3339)
+		fmt.Fprintf(&b, "%s snapshot %08x saved, %d files, %d MiB added\n", t, r.Uint32(), 4000+r.IntN(300), r.IntN(90))
+	}
+	if err := os.WriteFile(backup, []byte(b.String()), 0o644); err != nil {
+		return err
 	}
 
 	start := now.Add(-26 * time.Hour)
@@ -265,4 +275,39 @@ func poisson(mean float64, r *rand.Rand) int {
 		}
 		k++
 	}
+}
+
+// logOf is three hundred lines of a jail's log, three minutes apart up to end: failures in threes,
+// and what else the service writes between them.
+func logOf(j jail, end time.Time, r *rand.Rand) string {
+	var b strings.Builder
+	for i := 300; i > 0; i-- {
+		t := end.Add(-time.Duration(i) * 3 * time.Minute)
+		if r.IntN(5) == 0 {
+			ip := address(r)
+			for range 3 {
+				fmt.Fprintln(&b, j.line(t, ip, r))
+			}
+			continue
+		}
+		fmt.Fprintln(&b, background(j, t, r))
+	}
+	return b.String()
+}
+
+func writeGzip(path, content string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	z := gzip.NewWriter(f)
+	if _, err := z.Write([]byte(content)); err != nil {
+		f.Close()
+		return err
+	}
+	if err := z.Close(); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }

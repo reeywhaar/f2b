@@ -8,6 +8,8 @@ import type {
   FileRef,
   Jail,
   Kind,
+  LogDir,
+  LogEntry,
   LogPage,
   Me,
   RegexResult,
@@ -124,6 +126,13 @@ export const getStock = () => request<Stock>("/api/stock");
 export const getStockFile = (path: string) =>
   request<{ path: string; content: string }>(
     `/api/stock/${path.split("/").map(encodeURIComponent).join("/")}`,
+  );
+
+export const getLogs = () => request<{ roots: LogEntry[] }>("/api/logs");
+
+export const getLogsByPath = (path: string) =>
+  request<LogDir>(
+    `/api/logs/${path.replace(/^\//, "").split("/").map(encodeURIComponent).join("/")}`,
   );
 
 export const postRegex = (body: {

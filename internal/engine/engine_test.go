@@ -154,6 +154,8 @@ type stubDaemon struct {
 	actions  map[string][]string
 	banned   []string
 	unbanned []string
+	// logs are what each jail reads.
+	logs map[string][]string
 }
 
 func (d *stubDaemon) State() DaemonState {
@@ -163,7 +165,9 @@ func (d *stubDaemon) State() DaemonState {
 }
 func (d *stubDaemon) Restart() { d.mu.Lock(); d.restarts++; d.mu.Unlock() }
 func (d *stubDaemon) Jails(context.Context) ([]Jail, error) {
-	return []Jail{{Name: "sshd"}, {Name: "app"}}, nil
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return []Jail{{Name: "sshd", Logs: d.logs["sshd"]}, {Name: "app", Logs: d.logs["app"]}}, nil
 }
 func (d *stubDaemon) Banned(context.Context) (map[string][]string, error) {
 	d.mu.Lock()
@@ -404,15 +408,17 @@ func TestTheTesterReadsOnlyTheEndOfALog(t *testing.T) {
 		b.WriteString(strings.Repeat("x", 10) + string(rune('a'+i%26)) + "\n")
 	}
 	write(t, filepath.Join(dir, "big.log"), b.String())
-	if err := copyTail(filepath.Join(dir, "big.log"), filepath.Join(dir, "out.log"), 100); err != nil {
+	f, err := os.Open(filepath.Join(dir, "big.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := copyTail(f, filepath.Join(dir, "out.log"), 100); err != nil {
 		t.Fatal(err)
 	}
 	got := strings.Split(strings.TrimRight(read(t, filepath.Join(dir, "out.log")), "\n"), "\n")
 	if len(got) != 100 || got[99] != "xxxxxxxxxx"+string(rune('a'+4999%26)) {
 		t.Fatalf("%d lines, last %q", len(got), got[len(got)-1])
-	}
-	if copyTail("relative.log", filepath.Join(dir, "x"), 10) == nil {
-		t.Fatal("a relative path was read")
 	}
 }
 

@@ -2,8 +2,9 @@
 # Runs a built engine image through what it is for, with a real fail2ban and a real firewall in
 # the container's own network namespace: a filter and a jail saved through the API, failures
 # written to a log, the ban that follows in fail2ban and in iptables, an unban, a jail's action
-# changed for one of another name, a configuration fail2ban refuses, the filter tester, a restart
-# that puts the ban back, a rename, and /api/v1 as a read and a write token reach it.
+# changed for one of another name, a configuration fail2ban refuses, the filter tester and the logs
+# it may read, a restart that puts the ban back, a rename, and /api/v1 as a read and a write token
+# reach it.
 #
 #   docker build --target engine -t f2b-engine:smoke . && IMAGE=f2b-engine:smoke .github/smoke/smoke.sh
 set -eu
@@ -11,10 +12,11 @@ set -eu
 IMAGE="${IMAGE:?set IMAGE to the engine image to try}"
 name="f2b-smoke-$$"
 volume="$name-data"
+logs="$name-logs"
 
 cleanup() {
   docker rm -f "$name" >/dev/null 2>&1 || true
-  docker volume rm "$volume" >/dev/null 2>&1 || true
+  docker volume rm "$volume" "$logs" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -60,7 +62,11 @@ wait_for() {
 }
 
 docker volume create "$volume" >/dev/null
-docker run -d --name "$name" --cap-add NET_ADMIN --cap-add NET_RAW -v "$volume:/data" "$IMAGE" >/dev/null
+# A log directory mounted read-only, as a deploy mounts the host's: the engine finds it by that.
+docker volume create "$logs" >/dev/null
+docker run --rm --entrypoint sh -v "$logs:/l" "$IMAGE" -c \
+  'echo "{\"msg\":\"password refused\",\"ip\":\"203.0.113.5\"}" > /l/host.log'
+docker run -d --name "$name" --cap-add NET_ADMIN --cap-add NET_RAW -v "$volume:/data" -v "$logs:/hostlogs:ro" "$IMAGE" >/dev/null
 
 echo "==> fail2ban starts"
 wait_for '"state":"running"' api GET /api/engine
@@ -120,6 +126,15 @@ case "$out" in 200*'"matched":3'*) ;; *) fail "regex: $out" ;; esac
 # One line pasted with no newline after it, which fail2ban-regex alone would leave uncounted.
 out=$(api POST /api/regex '{"filter":"app","text":"{\"msg\":\"password refused\",\"ip\":\"203.0.113.3\"}"}')
 case "$out" in 200*'"lines":1,'*'"matched":1'*) ;; *) fail "pasted line: $out" ;; esac
+
+echo "==> the logs are the read-only mount and the jail's directory, and the tester reads nothing else"
+out=$(api GET /api/logs)
+case "$out" in 200*'"path":"/hostlogs"'*'"source":"mount"'*) ;; *) fail "the read-only mount is not among the logs: $out" ;; esac
+case "$out" in *'"path":"/logs"'*'"source":"jail"'*) ;; *) fail "the jail's directory is not among the logs: $out" ;; esac
+out=$(api POST /api/regex '{"filter":"app","log":"/hostlogs/host.log"}')
+case "$out" in 200*'"matched":1'*) ;; *) fail "regex over the mount: $out" ;; esac
+out=$(api POST /api/regex '{"filter":"app","log":"/data/fail2ban.sqlite3"}')
+case "$out" in 400*'not among the logs'*) ;; *) fail "the data directory was read: $out" ;; esac
 
 echo "==> a rename that would leave a jail naming nothing is refused; with the jail, it is one change"
 version=$(api GET /api/files/filters/app.local | sed 's/.*"version":"\([0-9a-f]*\)".*/\1/')
