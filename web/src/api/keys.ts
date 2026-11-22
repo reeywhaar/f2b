@@ -20,5 +20,8 @@ export const qk = {
   stock: ["stock"] as const,
   stockFile: (path: string) => ["stock", path] as const,
   logs: ["logs"] as const,
+  logFiles: ["logs", "*files"] as const,
   logDir: (path: string) => ["logs", path] as const,
+  logTail: (path: string, lines: number) =>
+    ["logs", path, "tail", lines] as const,
 };

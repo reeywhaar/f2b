@@ -75,7 +75,25 @@ maxretry = 5
 }
 
 /**
- * Content a new file was made from, handed to its editor across the navigation: a duplicate's.
+ * A new jail with a filter, reading a log: what a new jail starts with, saying both. Without a
+ * log, as for lines pasted, the template's stands for one.
+ */
+export function jailFor(name: string, filter: string, log?: string): string {
+  const jail = templateFor("jails", name).replace(
+    /^filter(\s*)= .*$/m,
+    (_, gap: string) => `filter${gap}= ${filter}`,
+  );
+  return log
+    ? jail.replace(
+        /^logpath(\s*)= .*$/m,
+        (_, gap: string) => `logpath${gap}= ${log}`,
+      )
+    : jail;
+}
+
+/**
+ * Content a new file was made from, handed to its editor across the navigation: a duplicate's,
+ * or a jail made for a filter.
  * Kept until the file is saved, so the editor reading it twice, as React does while developing,
  * reads it the same both times. A reload of the page starts from the template instead.
  */

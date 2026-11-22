@@ -1,7 +1,7 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { getLogs, getLogsByPath } from "@app/api/actions";
+import { getLogFiles, getLogs, getLogsByPath } from "@app/api/actions";
 import { qk } from "@app/api/keys";
 import { messageOf } from "@app/api/transport";
 import type { Jail, LogEntry } from "@app/api/types";
@@ -181,18 +181,35 @@ function Top({
   const pasted = !f || "lines pasted here".includes(f);
   const open = (e: LogEntry) =>
     e.dir ? () => go({ root: e.path, dir: e.path }) : () => choose(e.path);
+  // Every file among the logs, asked for once something is typed, and looked through as it is.
+  const searching = f !== "" && !typed;
+  const index = useQuery({
+    queryKey: qk.logFiles,
+    queryFn: getLogFiles,
+    enabled: searching,
+    staleTime: 30_000,
+  });
+  const listed = new Set(logs.map(([path]) => path));
+  const files = searching
+    ? (index.data?.files ?? []).filter(
+        (e) => !listed.has(e.path) && e.path.toLowerCase().includes(f),
+      )
+    : [];
 
   const log = logs[0]?.[0];
+  const file = files[0];
   const place = places[0];
   const enter = typed
     ? () => choose(typed)
     : log
       ? () => choose(log)
-      : place
-        ? open(place)
-        : pasted
-          ? () => choose(PASTED)
-          : undefined;
+      : file
+        ? () => choose(file.path)
+        : place
+          ? open(place)
+          : pasted
+            ? () => choose(PASTED)
+            : undefined;
 
   return (
     <div className="flex flex-col gap-4">
@@ -221,37 +238,63 @@ function Top({
           </Rows>
         </Section>
       ) : null}
-      <Section
-        title="Log directories"
-        note="What is mounted into the engine read-only, and where the running jails read their logs."
-      >
-        {roots.isPending ? (
-          <p className="text-sm text-muted">Reading…</p>
-        ) : roots.isError ? (
-          <p className="text-sm text-accent">{messageOf(roots.error)}</p>
-        ) : places.length ? (
-          <Rows>
-            {places.map((r) => (
-              <Row
-                key={r.path}
-                icon={r.dir ? <FolderIcon /> : <FileIcon />}
-                pressed={r.path === value}
-                onClick={open(r)}
-                aside={r.dir ? undefined : size(r.size)}
-                into={r.dir}
-              >
-                <span className="font-mono">{r.path}</span>
-              </Row>
-            ))}
-          </Rows>
-        ) : (
-          <p className="text-sm text-muted">
-            {f
-              ? "None by that name."
-              : "None: nothing is mounted read-only, and no jail is running."}
-          </p>
-        )}
-      </Section>
+      {searching ? (
+        <Section title="Files">
+          {index.isPending ? (
+            <p className="text-sm text-muted">Looking…</p>
+          ) : index.isError ? (
+            <p className="text-sm text-accent">{messageOf(index.error)}</p>
+          ) : files.length ? (
+            <FileRows
+              files={files}
+              value={value}
+              choose={choose}
+              label={(e) => e.path}
+            />
+          ) : (
+            <p className="text-sm text-muted">No file by that name.</p>
+          )}
+          {index.data?.more ? (
+            <p className="text-xs text-muted">
+              The search stopped short, at {count(index.data.files.length)}{" "}
+              files; a directory, gone into, lists the rest.
+            </p>
+          ) : null}
+        </Section>
+      ) : null}
+      {searching && !places.length ? null : (
+        <Section
+          title="Log directories"
+          note="What is mounted into the engine read-only, and where the running jails read their logs."
+        >
+          {roots.isPending ? (
+            <p className="text-sm text-muted">Reading…</p>
+          ) : roots.isError ? (
+            <p className="text-sm text-accent">{messageOf(roots.error)}</p>
+          ) : places.length ? (
+            <Rows>
+              {places.map((r) => (
+                <Row
+                  key={r.path}
+                  icon={r.dir ? <FolderIcon /> : <FileIcon />}
+                  pressed={r.path === value}
+                  onClick={open(r)}
+                  aside={r.dir ? undefined : size(r.size)}
+                  into={r.dir}
+                >
+                  <span className="font-mono">{r.path}</span>
+                </Row>
+              ))}
+            </Rows>
+          ) : (
+            <p className="text-sm text-muted">
+              {f
+                ? "None by that name."
+                : "None: nothing is mounted read-only, and no jail is running."}
+            </p>
+          )}
+        </Section>
+      )}
       {pasted ? (
         <Rows>
           <Row
@@ -292,10 +335,33 @@ function Directory({
   );
   const open = (e: LogEntry) =>
     e.dir ? () => go({ root: at.root, dir: e.path }) : () => choose(e.path);
+  // Files in the directories under this one, found by what is typed.
+  const index = useQuery({
+    queryKey: qk.logFiles,
+    queryFn: getLogFiles,
+    enabled: f !== "",
+    staleTime: 30_000,
+  });
+  const under = (e: LogEntry) => e.path.slice(at.dir.length + 1);
+  const below = f
+    ? (index.data?.files ?? []).filter(
+        (e) =>
+          e.path.startsWith(`${at.dir}/`) &&
+          under(e).includes("/") &&
+          under(e).toLowerCase().includes(f),
+      )
+    : [];
+  const first = shown[0];
+  const deeper = below[0];
+  const enter = first
+    ? open(first)
+    : deeper
+      ? () => choose(deeper.path)
+      : undefined;
 
   return (
     <div className="flex flex-col gap-2">
-      {search("Find in this directory", shown[0] ? open(shown[0]) : undefined)}
+      {search("Find in this directory and under it", enter)}
       <Crumbs at={at} go={go} />
       {dir.isPending ? (
         <p className="text-sm text-muted">Reading…</p>
@@ -335,7 +401,57 @@ function Directory({
           the first by name.
         </p>
       ) : null}
+      {below.length ? (
+        <Section title="Further down">
+          <FileRows files={below} value={value} choose={choose} label={under} />
+        </Section>
+      ) : null}
     </div>
+  );
+}
+
+/** How many files found are drawn: typing more of the name finds the rest. */
+const foundMax = 100;
+
+/** Files found, each to choose, with which jails read it, its size and its age. */
+function FileRows({
+  files,
+  value,
+  choose,
+  label,
+}: {
+  files: LogEntry[];
+  value: string;
+  choose: (value: string) => void;
+  label: (e: LogEntry) => string;
+}) {
+  return (
+    <>
+      <Rows>
+        {files.slice(0, foundMax).map((e) => (
+          <Row
+            key={e.path}
+            icon={<FileIcon />}
+            pressed={e.path === value}
+            onClick={() => choose(e.path)}
+            aside={
+              <>
+                {e.jails.length ? `${e.jails.join(", ")} · ` : ""}
+                {size(e.size)} ·{" "}
+                <span title={dateTime(e.modified)}>{ago(e.modified)}</span>
+              </>
+            }
+          >
+            <span className="font-mono">{label(e)}</span>
+          </Row>
+        ))}
+      </Rows>
+      {files.length > foundMax ? (
+        <p className="text-xs text-muted">
+          And {count(files.length - foundMax)} more; type more of the name.
+        </p>
+      ) : null}
+    </>
   );
 }
 

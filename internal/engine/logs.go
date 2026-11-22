@@ -292,6 +292,67 @@ func (s *Server) logDir(ctx context.Context, p string) (LogEntry, []LogEntry, bo
 	return entry, entries, more, nil
 }
 
+// How far a search for a log goes: every file among the logs, down to logDepthMax directories,
+// stopping after logVisitMax entries or logFilesMax files, so a picker finds one by its name
+// without going into each directory, and a tree of millions does not keep it waiting.
+const (
+	logFilesMax = 5000
+	logVisitMax = 50000
+	logDepthMax = 8
+)
+
+// logFiles is every file among the logs whose path holds match, case aside, or every file for
+// "", by path. Links are followed to files and only inside the place they are in, never to
+// directories, which could lead round in a circle. more says the search stopped short.
+func (s *Server) logFiles(ctx context.Context, match string) ([]LogEntry, bool) {
+	roots, readers := s.logRoots(ctx)
+	match = strings.ToLower(match)
+	holds := func(p string) bool { return match == "" || strings.Contains(strings.ToLower(p), match) }
+	var out []LogEntry
+	visited, more := 0, false
+	for _, r := range roots {
+		if !r.Dir {
+			if holds(r.Path) {
+				r.Name, r.Source = filepath.Base(r.Path), ""
+				out = append(out, r)
+			}
+			continue
+		}
+		root, err := os.OpenRoot(r.Path)
+		if err != nil {
+			continue
+		}
+		fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if visited++; visited > logVisitMax || len(out) >= logFilesMax {
+				more = true
+				return fs.SkipAll
+			}
+			if d.IsDir() {
+				if rel != "." && strings.Count(rel, "/") >= logDepthMax-1 {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			p := filepath.Join(r.Path, rel)
+			if !holds(p) {
+				return nil
+			}
+			info, err := root.Stat(rel)
+			if err != nil || !info.Mode().IsRegular() {
+				return nil
+			}
+			out = append(out, entryOf(d.Name(), p, info, readers, ""))
+			return nil
+		})
+		root.Close()
+	}
+	slices.SortFunc(out, func(a, b LogEntry) int { return strings.Compare(a.Path, b.Path) })
+	return out, more
+}
+
 // openLog opens a file among the logs to read.
 func (s *Server) openLog(ctx context.Context, p string) (*os.File, error) {
 	root, rel, _, err := s.inLogs(ctx, p)
@@ -318,9 +379,9 @@ func (s *Server) openLog(ctx context.Context, p string) (*os.File, error) {
 	return f, nil
 }
 
-// copyTail copies the last n lines of a log, so a tester run over a log of gigabytes reads what
-// it was asked to. A log ending .gz, as a rotated one does, is read through.
-func copyTail(f *os.File, to string, n int) error {
+// tailOf is the last n lines of a log, so a log of gigabytes is read for what was asked of it. A
+// log ending .gz, as a rotated one does, is read through.
+func tailOf(f *os.File, n int) ([]string, error) {
 	var b []byte
 	var err error
 	if strings.HasSuffix(f.Name(), ".gz") {
@@ -329,13 +390,36 @@ func copyTail(f *os.File, to string, n int) error {
 		b, err = tailPlain(f, n)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	all := bytes.Split(bytes.TrimRight(b, "\n"), []byte("\n"))
+	all := linesOf(b)
 	if len(all) > n {
 		all = all[len(all)-n:]
 	}
-	return os.WriteFile(to, append(bytes.Join(all, []byte("\n")), '\n'), 0o644)
+	return all, nil
+}
+
+// copyTail copies the last n lines of a log, for the tester to try.
+func copyTail(f *os.File, to string, n int) error {
+	lines, err := tailOf(f, n)
+	if err != nil {
+		return err
+	}
+	text := strings.Join(lines, "\n")
+	if len(lines) > 0 {
+		text += "\n"
+	}
+	return os.WriteFile(to, []byte(text), 0o644)
+}
+
+// logTail is the last n lines of the file at p among the logs.
+func (s *Server) logTail(ctx context.Context, p string, n int) ([]string, error) {
+	f, err := s.openLog(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return tailOf(f, n)
 }
 
 func tailPlain(f *os.File, n int) ([]byte, error) {
@@ -395,16 +479,31 @@ func tailGzip(f *os.File, n int) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+// logRootList is the places logs are read from; with files=1, every file among them too.
 func (s *Server) logRootList(w http.ResponseWriter, r *http.Request) {
 	roots, _ := s.logRoots(r.Context())
-	reply.JSON(w, http.StatusOK, map[string]any{"roots": roots})
+	out := map[string]any{"roots": roots}
+	if r.URL.Query().Get("files") != "" {
+		out["files"], out["more"] = s.logFiles(r.Context(), "")
+	}
+	reply.JSON(w, http.StatusOK, out)
 }
 
+// logEntry is a directory or a file among the logs; with tail=n, a file's last n lines too.
 func (s *Server) logEntry(w http.ResponseWriter, r *http.Request) {
 	entry, entries, more, err := s.logDir(r.Context(), "/"+r.PathValue("path"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	reply.JSON(w, http.StatusOK, map[string]any{"entry": entry, "entries": entries, "more": more})
+	out := map[string]any{"entry": entry, "entries": entries, "more": more}
+	if t := r.URL.Query().Get("tail"); t != "" && !entry.Dir {
+		lines, err := s.logTail(r.Context(), entry.Path, pageSize(t, regexLines, regexLinesMax))
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		out["lines"] = lines
+	}
+	reply.JSON(w, http.StatusOK, out)
 }

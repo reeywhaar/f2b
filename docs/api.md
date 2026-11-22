@@ -116,8 +116,11 @@ one such as `jail.conf`.
 `filter` is as a jail names it. `file` and `content` are a filter file as it would be, saved or
 not. `log` is a file among the logs below, of which the last `lines` are tried (2,000 by default,
 20,000 at most), or `text` the lines themselves; a log ending `.gz` is read through. One that is
-not among them is `400`. `{ok, output, summary: {lines, ignored, matched, missed}}`, `summary`
-null when fail2ban-regex did not get as far as counting.
+not among them is `400`. `{ok, output, summary: {lines, ignored, matched, missed}, lines}`,
+`summary` null when fail2ban-regex did not get as far as counting. `lines` is each line tried,
+in order, as `{text, verdict}`: `matched`, `ignored` or `missed`, as fail2ban-regex printed it
+under each, or `""` where it did not say, as when it stopped on an error. `output` is what
+fail2ban-regex said without those lines.
 
 ## Logs
 
@@ -126,10 +129,13 @@ the running jails read logs in; never the data directory, or one holding it. A j
 in the data directory brings that log alone.
 
 `GET /api/logs` — `{roots: [entry]}`: each of those places, `source` saying why it is one,
-`mount` or `jail`.
+`mount` or `jail`. With `files=1`, also `files`, every file among them by path, and `more`: the
+search goes 8 directories down and stops at 5,000 files or 50,000 entries, saying so in `more`.
+A link is followed only to a file, and only inside its place.
 
 `GET /api/logs/{path}` — `{entry, entries, more}` for a directory or a file among them, its path
-without the first slash: `/api/logs/var/log`. `entries` is what a directory holds, directories
+without the first slash: `/api/logs/var/log`. With `tail=n`, a file's last `n` lines too, as
+`lines`: 2,000 for a `tail` that is not a number, 20,000 at most, a `.gz` read through. `entries` is what a directory holds, directories
 first, then files, each by name, and only those: 2,000 at most, with `more` true when there were
 more. A link is followed only while it stays inside the place it is in. A path that is not among
 the logs, or not there, is `404`.
@@ -170,7 +176,7 @@ What JSON:API asks, and what this adds:
   title, detail, meta}]}`, with the codes of the refusals above and `meta.output` for
   `config_rejected`.
 - Query parameters are `filter[…]` and `page[…]`: `filter[jail]`, `filter[ip]`, `filter[kind]`,
-  `filter[days]`, `filter[dir]`, `page[before]`, `page[after]`, `page[epoch]`, `page[size]`. `links.next` is the
+  `filter[days]`, `filter[dir]`, `filter[path]`, `page[before]`, `page[after]`, `page[epoch]`, `page[size]`. `links.next` is the
   page after, where there is one.
 - A ban in force is `bans` with the id `jail/ip`, and is lifted at
   `DELETE /api/v1/jails/{jail}/bans/{ip}`, a range's slash escaped as `%2F`. A ban in the database
@@ -181,5 +187,7 @@ What JSON:API asks, and what this adds:
 - A rename, `POST /api/v1/files/{kind}/{name}/rename`, is an action rather than a resource, and
   takes `{meta: {to, references}}`.
 - The logs are `log-files` with the path as id: `GET /api/v1/log-files` the places,
-  `?filter[dir]=/var/log` what one directory holds with `meta.more`, and
-  `GET /api/v1/log-files/var/log/auth.log` one.
+  `?filter[dir]=/var/log` what one directory holds with `meta.more`, `?filter[path]=restic`
+  every file whose path holds it, and
+  `GET /api/v1/log-files/var/log/auth.log` one; with `page[size]`, a file's last lines in
+  `attributes.lines`.

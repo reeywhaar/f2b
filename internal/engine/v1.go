@@ -650,13 +650,17 @@ func logResource(e LogEntry) resource {
 func (s *Server) v1LogFiles(w http.ResponseWriter, r *http.Request) {
 	var list []LogEntry
 	var meta map[string]any
-	if dir := r.URL.Query().Get("filter[dir]"); dir != "" {
+	q := r.URL.Query()
+	if dir := q.Get("filter[dir]"); dir != "" {
 		_, entries, more, err := s.logDir(r.Context(), dir)
 		if err != nil {
 			s.failDoc(w, r, err)
 			return
 		}
 		list, meta = entries, map[string]any{"more": more}
+	} else if name := q.Get("filter[path]"); name != "" {
+		files, more := s.logFiles(r.Context(), name)
+		list, meta = files, map[string]any{"more": more}
 	} else {
 		list, _ = s.logRoots(r.Context())
 	}
@@ -671,13 +675,26 @@ func (s *Server) v1LogFiles(w http.ResponseWriter, r *http.Request) {
 	writeDoc(w, http.StatusOK, doc)
 }
 
+// v1LogFile is one directory or file among the logs; with page[size], a file's last lines.
 func (s *Server) v1LogFile(w http.ResponseWriter, r *http.Request) {
 	entry, _, _, err := s.logDir(r.Context(), "/"+r.PathValue("path"))
 	if err != nil {
 		s.failDoc(w, r, err)
 		return
 	}
-	writeDoc(w, http.StatusOK, document{Data: logResource(entry)})
+	res := logResource(entry)
+	if size := r.URL.Query().Get("page[size]"); size != "" && !entry.Dir {
+		lines, err := s.logTail(r.Context(), entry.Path, pageSize(size, regexLines, regexLinesMax))
+		if err != nil {
+			s.failDoc(w, r, err)
+			return
+		}
+		res.Attributes = struct {
+			LogEntry
+			Lines []string `json:"lines"`
+		}{entry, lines}
+	}
+	writeDoc(w, http.StatusOK, document{Data: res})
 }
 
 // The log, followed by page[after] from where the last page ended.

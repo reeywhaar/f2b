@@ -120,9 +120,14 @@ out=$(api PUT /api/files/jails/bad.local '{"content":"[bad]\nenabled = true\nfil
 case "$out" in 422*config_rejected*nosuchfilter*) ;; *) fail "refusal: $out" ;; esac
 docker exec "$name" test ! -e /data/fail2ban/jail.d/bad.local || fail "a refused file was written"
 
-echo "==> the tester runs fail2ban-regex"
+echo "==> the tester runs fail2ban-regex, and says what it made of each line"
+docker exec "$name" sh -c 'echo "{\"msg\":\"signed in\",\"ip\":\"203.0.113.9\"}" >> /logs/app.log'
 out=$(api POST /api/regex '{"filter":"app","log":"/logs/app.log"}')
 case "$out" in 200*'"matched":3'*) ;; *) fail "regex: $out" ;; esac
+case "$out" in *'password refused'*'"verdict":"matched"'*'signed in'*'"verdict":"missed"'*) ;; *) fail "the lines' verdicts: $out" ;; esac
+case "$out" in *'Matched line(s)'*) fail "the lines are still in the output: $out" ;; esac
+out=$(api GET '/api/logs/logs/app.log?tail=1')
+case "$out" in 200*'"lines":["{\"msg\":\"signed in\"'*) ;; *) fail "the log's last line: $out" ;; esac
 # One line pasted with no newline after it, which fail2ban-regex alone would leave uncounted.
 out=$(api POST /api/regex '{"filter":"app","text":"{\"msg\":\"password refused\",\"ip\":\"203.0.113.3\"}"}')
 case "$out" in 200*'"lines":1,'*'"matched":1'*) ;; *) fail "pasted line: $out" ;; esac

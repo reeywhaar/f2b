@@ -1376,7 +1376,7 @@
         "x-f2b-scope": "read",
         "responses": {
           "200": {
-            "description": "Without filter[dir], the places logs are read from; with it, that directory's directories and files, directories first.",
+            "description": "Without a filter, the places logs are read from; with filter[dir], that directory's directories and files, directories first; with filter[path], every file among the logs whose path holds it.",
             "content": {
               "application/vnd.api+json": {
                 "schema": {
@@ -1396,7 +1396,7 @@
                       "properties": {
                         "more": {
                           "type": "boolean",
-                          "description": "With filter[dir]: the directory held more than were listed."
+                          "description": "With a filter: there were more than were listed, or the search stopped short."
                         }
                       }
                     },
@@ -1430,6 +1430,14 @@
               "type": "string"
             },
             "description": "A directory among the logs, absolute."
+          },
+          {
+            "name": "filter[path]",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Text a file's path holds, case aside: every file among the logs, 8 directories down, 5,000 at most."
           }
         ]
       }
@@ -1483,6 +1491,16 @@
               "type": "string"
             },
             "description": "Its absolute path without the first slash, its slashes not escaped: var/log/auth.log."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20000
+            },
+            "description": "For a file: its last this many lines, in attributes.lines; one ending .gz is read through."
           }
         ]
       }
@@ -2356,6 +2374,28 @@
                     "type": "null"
                   }
                 ]
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "verdict": {
+                      "type": "string",
+                      "enum": [
+                        "matched",
+                        "ignored",
+                        "missed",
+                        ""
+                      ],
+                      "description": "What the filter made of it; empty where fail2ban-regex did not say, as when it stopped on an error."
+                    }
+                  }
+                },
+                "description": "Each line tried, in order. output leaves them out."
               }
             }
           }
@@ -2453,6 +2493,13 @@
                   "jail"
                 ],
                 "description": "On a place logs are read from only: mount, a read-only mount; jail, where a running jail reads a log."
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "A file's last lines, where one file is asked for with page[size]."
               }
             }
           },

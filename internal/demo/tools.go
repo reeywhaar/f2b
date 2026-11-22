@@ -136,8 +136,7 @@ func (t tools) Regex(ctx context.Context, dir, log, filter string) engine.Result
 	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 	hits := make([]int, len(fail))
 	ignoreHits := make([]int, len(ignore))
-	var matched, missed []string
-	ignored := 0
+	var matched, ignored, missed []string
 lines:
 	for _, line := range lines {
 		text := line
@@ -150,7 +149,7 @@ lines:
 		for i, re := range ignore {
 			if re.MatchString(text) {
 				ignoreHits[i]++
-				ignored++
+				ignored = append(ignored, line)
 				continue lines
 			}
 		}
@@ -174,7 +173,7 @@ lines:
 	for i, src := range failSrc {
 		fmt.Fprintf(&o, "|  %2d) [%d] %s\n", i+1, hits[i], src)
 	}
-	fmt.Fprintf(&o, "`-\n\nIgnoreregex: %d total\n", ignored)
+	fmt.Fprintf(&o, "`-\n\nIgnoreregex: %d total\n", len(ignored))
 	if len(ignoreSrc) > 0 {
 		fmt.Fprintf(&o, "|-  #) [# of hits] regular expression\n")
 		for i, src := range ignoreSrc {
@@ -182,20 +181,18 @@ lines:
 		}
 		fmt.Fprintf(&o, "`-\n")
 	}
-	fmt.Fprintf(&o, "\nLines: %d lines, %d ignored, %d matched, %d missed\n", len(lines), ignored, len(matched), len(missed))
+	fmt.Fprintf(&o, "\nLines: %d lines, %d ignored, %d matched, %d missed\n", len(lines), len(ignored), len(matched), len(missed))
 	fmt.Fprintf(&o, "[processed in %.2f sec]\n\n", time.Since(start).Seconds())
-	if len(matched) > 0 {
-		fmt.Fprintf(&o, "|- Matched line(s):\n")
-		for _, l := range matched {
-			fmt.Fprintf(&o, "|  %s\n", l)
+	// Every line, under what was made of it, as fail2ban-regex prints them given --print-all-….
+	for _, group := range []struct {
+		heading string
+		lines   []string
+	}{{"Matched", matched}, {"Ignored", ignored}, {"Missed", missed}} {
+		if len(group.lines) == 0 {
+			continue
 		}
-		fmt.Fprintf(&o, "`-\n")
-	}
-	if len(missed) > 20 {
-		fmt.Fprintf(&o, "\nMissed line(s): too many to print.  Use --print-all-missed to print all %d lines\n", len(missed))
-	} else if len(missed) > 0 {
-		fmt.Fprintf(&o, "|- Missed line(s):\n")
-		for _, l := range missed {
+		fmt.Fprintf(&o, "|- %s line(s):\n", group.heading)
+		for _, l := range group.lines {
 			fmt.Fprintf(&o, "|  %s\n", l)
 		}
 		fmt.Fprintf(&o, "`-\n")

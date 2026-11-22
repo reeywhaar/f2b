@@ -705,11 +705,13 @@ type RegexRequest struct {
 	Lines int    `json:"lines"`
 }
 
-// RegexResult is what fail2ban-regex said, and its count when it got as far as counting.
+// RegexResult is what fail2ban-regex said, its count when it got as far as counting, and each
+// line tried with what the filter made of it. Output leaves out the lines, which Lines has.
 type RegexResult struct {
 	OK      bool          `json:"ok"`
 	Output  string        `json:"output"`
 	Summary *RegexSummary `json:"summary"`
+	Lines   []RegexLine   `json:"lines"`
 }
 
 func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
@@ -769,7 +771,12 @@ func (s *Server) runRegex(ctx context.Context, req RegexRequest) (RegexResult, e
 		return RegexResult{}, err
 	}
 	res := s.Tools.Regex(ctx, filepath.Join(dir, "etc"), sample, req.Filter)
-	out := RegexResult{OK: res.OK, Output: res.Output}
+	b, err := os.ReadFile(sample)
+	if err != nil {
+		return RegexResult{}, err
+	}
+	tried, output := verdicts(linesOf(b), res.Output)
+	out := RegexResult{OK: res.OK, Output: output, Lines: tried}
 	if m := summaryLine.FindStringSubmatch(res.Output); m != nil {
 		n := func(i int) int64 { v, _ := strconv.ParseInt(m[i], 10, 64); return v }
 		out.Summary = &RegexSummary{Lines: n(1), Ignored: n(2), Matched: n(3), Missed: n(4)}

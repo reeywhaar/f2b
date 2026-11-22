@@ -202,6 +202,8 @@ type stubTools struct {
 	reloads int
 	sample  string
 	actions map[string][]string
+	// said is what fail2ban-regex says, if anything.
+	said string
 }
 
 func (s *stubTools) Actions(context.Context, string) (map[string][]string, error) {
@@ -228,7 +230,7 @@ func (s *stubTools) Regex(_ context.Context, _, log, _ string) Result {
 	s.mu.Lock()
 	s.sample = string(b)
 	s.mu.Unlock()
-	return Result{OK: true}
+	return Result{OK: true, Output: s.said}
 }
 
 func server(t *testing.T) (*Server, *stubDaemon, *stubTools, string) {

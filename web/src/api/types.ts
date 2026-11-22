@@ -92,7 +92,13 @@ export type LogEntry = {
   source?: "mount" | "jail";
 };
 
-export type LogDir = { entry: LogEntry; entries: LogEntry[]; more: boolean };
+export type LogDir = {
+  entry: LogEntry;
+  entries: LogEntry[];
+  more: boolean;
+  /** A file's last lines, when asked for. */
+  lines?: string[];
+};
 
 /** What an API token may do on /api/v1. */
 export type Scope = "read" | "write";
@@ -115,9 +121,17 @@ export type Token = {
 /** How long a token lasts, and how long unused: the web's keys for them. */
 export type Lifetime = "1d" | "1w" | "30d" | "90d" | "180d" | "1y" | "never";
 
+/** What the filter made of a line: "" where fail2ban-regex did not say. */
+export type Verdict = "matched" | "ignored" | "missed" | "";
+
+export type RegexLine = { text: string; verdict: Verdict };
+
 export type RegexResult = {
   ok: boolean;
+  /** What fail2ban-regex said, without the lines, which lines has. */
   output: string;
+  /** Each line tried, in order. */
+  lines: RegexLine[];
   summary: {
     lines: number;
     ignored: number;

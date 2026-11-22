@@ -130,9 +130,16 @@ export const getStockFile = (path: string) =>
 
 export const getLogs = () => request<{ roots: LogEntry[] }>("/api/logs");
 
-export const getLogsByPath = (path: string) =>
+/** Every file among the logs, as far as the engine looks: more says it stopped short. */
+export const getLogFiles = () =>
+  request<{ roots: LogEntry[]; files: LogEntry[]; more: boolean }>(
+    "/api/logs?files=1",
+  );
+
+/** A directory or a file among the logs; with tail, a file's last that many lines too. */
+export const getLogsByPath = (path: string, tail?: number) =>
   request<LogDir>(
-    `/api/logs/${path.replace(/^\//, "").split("/").map(encodeURIComponent).join("/")}`,
+    `/api/logs/${path.replace(/^\//, "").split("/").map(encodeURIComponent).join("/")}${query({ tail })}`,
   );
 
 export const postRegex = (body: {

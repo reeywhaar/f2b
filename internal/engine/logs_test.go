@@ -181,3 +181,27 @@ func TestAReadTokenListsTheLogsInJSONAPI(t *testing.T) {
 		t.Fatalf("the session key answered %d %v", code, out)
 	}
 }
+
+func TestEveryFileAmongTheLogsIsFoundByItsPath(t *testing.T) {
+	s, base := logsServer(t)
+	write(t, filepath.Join(base, "host/var/log/backup/restic.log"), "saved\n")
+	code, out := do(t, s, "GET", "/api/logs?files=1", "")
+	if code != http.StatusOK || out["more"] != false {
+		t.Fatalf("%d %v", code, out)
+	}
+	var got []string
+	for _, f := range out["files"].([]any) {
+		got = append(got, strings.TrimPrefix(f.(map[string]any)["path"].(string), base))
+	}
+	// Not the link out to the session key, nor anything else in the data directory.
+	want := []string{"/data/fail2ban.log", "/data/logs/app.log", "/host/var/log/auth.log",
+		"/host/var/log/backup/restic.log", "/host/var/log/nginx/access.log", "/jails/web.log"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	code, _, doc := v1(t, s, "GET", "/api/v1/log-files?filter[path]=RES", "", readScope)
+	data := doc["data"].([]any)
+	if code != http.StatusOK || len(data) != 1 || data[0].(map[string]any)["id"] != filepath.Join(base, "host/var/log/backup/restic.log") {
+		t.Fatalf("%d %v", code, doc)
+	}
+}

@@ -7,10 +7,12 @@ import { mount } from "@app/test/harness";
 
 const getLogs = vi.fn();
 const getLogsByPath = vi.fn();
+const getLogFiles = vi.fn();
 
 vi.mock("@app/api/actions", () => ({
   getLogs: () => getLogs(),
   getLogsByPath: (p: string) => getLogsByPath(p),
+  getLogFiles: () => getLogFiles(),
 }));
 
 afterEach(() => vi.clearAllMocks());
@@ -82,6 +84,48 @@ describe("the log picker", () => {
     fireEvent.click(await screen.findByText("syslog"));
     expect(onChange).toHaveBeenCalledWith("/var/log/syslog");
     expect(getLogsByPath).toHaveBeenCalledWith("/var/log/nginx");
+  });
+
+  it("finds a file in a directory under the places by its name", async () => {
+    getLogFiles.mockResolvedValue({
+      roots: [],
+      files: [
+        entry("/var/log/auth.log"),
+        entry("/var/log/backup/restic.log"),
+        entry("/var/log/syslog"),
+      ],
+      more: false,
+    });
+    const onChange = open();
+    const find = screen.getByLabelText("Find a log or a jail, or type a path");
+    fireEvent.change(find, { target: { value: "res" } });
+    expect(await screen.findByText("/var/log/backup/restic.log")).toBeTruthy();
+    expect(screen.queryByText("/var/log/syslog")).toBeNull();
+    fireEvent.keyDown(find, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith("/var/log/backup/restic.log");
+  });
+
+  it("finds what is under the directory it is in", async () => {
+    getLogFiles.mockResolvedValue({
+      roots: [],
+      files: [entry("/var/log/backup/restic.log"), entry("/srv/restic.log")],
+      more: false,
+    });
+    getLogsByPath.mockResolvedValue({
+      entry: entry("/var/log", true),
+      entries: [entry("/var/log/backup", true)],
+      more: false,
+    });
+    const onChange = open();
+    fireEvent.click(await screen.findByText("/var/log"));
+    const find = await screen.findByLabelText(
+      "Find in this directory and under it",
+    );
+    fireEvent.change(find, { target: { value: "restic" } });
+    expect(await screen.findByText("backup/restic.log")).toBeTruthy();
+    expect(screen.queryByText("/srv/restic.log")).toBeNull();
+    fireEvent.keyDown(find, { key: "Enter" });
+    expect(onChange).toHaveBeenCalledWith("/var/log/backup/restic.log");
   });
 
   it("takes a path typed, or lines pasted", async () => {

@@ -17,9 +17,12 @@ type Programs struct {
 	Tester string
 }
 
-// outputMax bounds what is kept of a program's output: fail2ban-regex over a busy log can print
-// every line it matched.
-const outputMax = 512 << 10
+// outputMax bounds what is kept of a program's output. fail2ban-regex prints every line it
+// tried, sorted by what it made of each, and is given more: twenty thousand lines of a busy log.
+const (
+	outputMax      = 512 << 10
+	regexOutputMax = 32 << 20
+)
 
 const (
 	checkTimeout  = time.Minute
@@ -55,16 +58,22 @@ func actionsIn(dump string) map[string][]string {
 }
 
 // Regex runs without resolving names: a tester waiting on DNS for each host it matched is a
-// tester nobody waits for.
+// tester nobody waits for. It prints every line, under what it made of it, which is how each line
+// is told matched, ignored or missed.
 func (p Programs) Regex(ctx context.Context, dir, log, filter string) Result {
-	return run(ctx, regexTimeout, p.Tester, "-c", dir, "--raw", "--print-all-matched", log, filter)
+	return runCapped(ctx, regexTimeout, regexOutputMax, p.Tester, "-c", dir, "--raw",
+		"--print-all-matched", "--print-all-ignored", "--print-all-missed", log, filter)
 }
 
 func run(parent context.Context, timeout time.Duration, name string, args ...string) Result {
+	return runCapped(parent, timeout, outputMax, name, args...)
+}
+
+func runCapped(parent context.Context, timeout time.Duration, most int, name string, args ...string) Result {
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
-	var out capped
+	out := capped{max: most}
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()
 	text := strings.TrimRight(out.String(), "\n")
@@ -77,14 +86,15 @@ func run(parent context.Context, timeout time.Duration, name string, args ...str
 	return Result{OK: err == nil, Output: text}
 }
 
-// capped keeps the first outputMax bytes and says so when there was more.
+// capped keeps the first max bytes and says so when there was more.
 type capped struct {
 	bytes.Buffer
+	max  int
 	over bool
 }
 
 func (c *capped) Write(p []byte) (int, error) {
-	if room := outputMax - c.Len(); room < len(p) {
+	if room := c.max - c.Len(); room < len(p) {
 		if room > 0 {
 			c.Buffer.Write(p[:room])
 		}

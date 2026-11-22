@@ -18,6 +18,7 @@ import { Frame } from "@app/components/Frame";
 import { Menu } from "@app/components/Menu";
 import { CodeEditor } from "@app/editor/CodeEditor";
 import { ago } from "@app/format";
+import { addFailregex } from "@app/islands/app/failregex";
 import { RegexTester } from "@app/islands/app/RegexTester";
 import { NameDialog } from "@app/islands/app/NameDialog";
 import { Crumbs } from "@app/islands/app/Crumbs";
@@ -336,7 +337,13 @@ export function FileEditor({
       </div>
 
       {kind === "filters" && base !== null ? (
-        <RegexTester file={name} content={draft} />
+        <RegexTester
+          file={name}
+          content={draft}
+          saved={!fresh}
+          dirty={dirty}
+          onDraft={(regex) => setDraft((d) => addFailregex(d, regex))}
+        />
       ) : null}
       <NameDialog
         open={duplicating}
