@@ -46,8 +46,12 @@ func server(t *testing.T) (*Server, *bytes.Buffer, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	tokens, err := OpenTokens(cfg.Layout.Tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var logs bytes.Buffer
-	return New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), sessions, spa), &logs, dir
+	return New(cfg, slog.New(slog.NewJSONHandler(&logs, nil)), sessions, tokens, spa), &logs, dir
 }
 
 func send(s *Server, method, path, body string, cookies ...*http.Cookie) *httptest.ResponseRecorder {

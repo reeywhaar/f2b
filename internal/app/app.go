@@ -47,6 +47,8 @@ type Layout struct {
 	Socket string
 	// SessionKey signs the web's cookies.
 	SessionKey string
+	// Tokens are the API tokens the web has issued: a digest of each, never the token.
+	Tokens string
 }
 
 func LayoutOf(data string) Layout {
@@ -57,5 +59,6 @@ func LayoutOf(data string) Layout {
 		Log:        filepath.Join(data, "fail2ban.log"),
 		Socket:     filepath.Join(data, "engine.sock"),
 		SessionKey: filepath.Join(data, "session.key"),
+		Tokens:     filepath.Join(data, "tokens.json"),
 	}
 }

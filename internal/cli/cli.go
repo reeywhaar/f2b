@@ -187,13 +187,17 @@ func runWeb() error {
 	if err != nil {
 		return err
 	}
+	tokens, err := webui.OpenTokens(cfg.Layout.Tokens)
+	if err != nil {
+		return err
+	}
 	spa, err := webui.NewSPA(bundle(log))
 	if err != nil {
 		return err
 	}
 	srv := &http.Server{
 		Addr:              app.ListenAddr,
-		Handler:           webui.New(cfg, log, sessions, spa),
+		Handler:           webui.New(cfg, log, sessions, tokens, spa),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

@@ -9,11 +9,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/netip"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,6 +31,7 @@ type Server struct {
 	cfg      *config.Web
 	log      *slog.Logger
 	sessions *Sessions
+	tokens   *Tokens
 	spa      *SPA
 	engine   *httputil.ReverseProxy
 	mux      *http.ServeMux
@@ -40,11 +44,12 @@ type Server struct {
 // which with many jails takes a while.
 const engineTimeout = 3 * time.Minute
 
-func New(cfg *config.Web, log *slog.Logger, sessions *Sessions, spa *SPA) *Server {
+func New(cfg *config.Web, log *slog.Logger, sessions *Sessions, tokens *Tokens, spa *SPA) *Server {
 	s := &Server{
 		cfg:      cfg,
 		log:      log,
 		sessions: sessions,
+		tokens:   tokens,
 		spa:      spa,
 		mux:      http.NewServeMux(),
 		loginAll: newLimiter(30, 2*time.Second),
@@ -56,8 +61,10 @@ func New(cfg *config.Web, log *slog.Logger, sessions *Sessions, spa *SPA) *Serve
 			pr.Out.URL.Scheme = "http"
 			pr.Out.URL.Host = "engine"
 			pr.Out.Host = "engine"
-			// The engine has no use for the browser's cookie, and is better off never seeing it.
+			// The engine has no use for the browser's cookie or a token, and is better off never
+			// seeing either.
 			pr.Out.Header.Del("Cookie")
+			pr.Out.Header.Del("Authorization")
 		},
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -73,7 +80,7 @@ func New(cfg *config.Web, log *slog.Logger, sessions *Sessions, spa *SPA) *Serve
 				return
 			}
 			s.log.Warn("the engine did not answer", "path", r.URL.Path, "error", err.Error())
-			reply.Refuse(w, http.StatusBadGateway, reply.CodeEngine,
+			refuse(w, r, http.StatusBadGateway, reply.CodeEngine,
 				"The engine is not answering. Is the f2b-engine container running, with the same data volume?")
 		},
 	}
@@ -85,6 +92,13 @@ func New(cfg *config.Web, log *slog.Logger, sessions *Sessions, spa *SPA) *Serve
 	s.mux.Handle("POST /api/auth/logout", s.requireSession(s.logout))
 	s.mux.Handle("POST /api/auth/logout-everywhere", s.requireSession(s.logoutEverywhere))
 	s.mux.Handle("GET /api/auth/me", s.requireSession(s.me))
+	// Tokens are made and ended by a signed-in browser, never by a token.
+	s.mux.Handle("GET /api/auth/tokens", s.requireSession(s.listTokens))
+	s.mux.Handle("POST /api/auth/tokens", s.requireSession(s.issueToken))
+	s.mux.Handle("DELETE /api/auth/tokens/{id}", s.requireSession(s.revokeToken))
+	// What /api/v1 is, for whoever is about to ask for a token to use it.
+	s.mux.HandleFunc("GET /api/v1/openapi.json", s.engine.ServeHTTP)
+	s.mux.Handle("/api/v1/", s.requireCaller(s.engine.ServeHTTP))
 	s.mux.Handle("/api/", s.requireSession(s.engine.ServeHTTP))
 	s.mux.Handle("/", s.gate(spa))
 	return s
@@ -153,6 +167,123 @@ func (s *Server) requireSession(next http.HandlerFunc) http.Handler {
 	})
 }
 
+// requireCaller admits a request to /api/v1 that carries a working API token, or a live
+// session, and tells the engine which scope it has: the token's, or a session's, which is
+// everything. The engine decides what each scope may do.
+func (s *Server) requireCaller(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only the web says what a request may do.
+		r.Header.Del(app.ScopeHeader)
+		if auth := r.Header.Get("Authorization"); auth != "" {
+			text, bearer := strings.CutPrefix(auth, "Bearer ")
+			tok, ok := s.tokens.Verify(strings.TrimSpace(text))
+			if !bearer || !ok {
+				ip := s.clientIP(r)
+				// One line per refused token, for fail2ban, as for a wrong password. Never the token.
+				s.log.Warn("token refused", "ip", ip)
+				if !s.loginIP.allow(ip) {
+					refuse(w, r, http.StatusTooManyRequests, reply.CodeRateLimited, "Too many refused tokens from here. Wait a minute.")
+					return
+				}
+				refuse(w, r, http.StatusUnauthorized, reply.CodeUnauthenticated,
+					"That token is not one this server issued, or it was revoked, or it has expired.")
+				return
+			}
+			if sv, ok := w.(*served); ok {
+				sv.token = tok.Name
+			}
+			r.Header.Set(app.ScopeHeader, tok.Scope)
+			next(w, r)
+			return
+		}
+		if !s.sessions.Valid(w, r) {
+			refuse(w, r, http.StatusUnauthorized, reply.CodeUnauthenticated,
+				"Send an API token, as Authorization: Bearer f2b_…. Config in the interface issues them.")
+			return
+		}
+		r.Header.Set(app.ScopeHeader, app.ScopeWrite)
+		next(w, r)
+	})
+}
+
+// jsonAPI is JSON:API's media type, which every answer under /api/v1 is in, the web's refusals
+// among them.
+const jsonAPI = "application/vnd.api+json"
+
+func isV1(r *http.Request) bool { return strings.HasPrefix(r.URL.Path, "/api/v1/") }
+
+// refuse is reply.Refuse, or under /api/v1 the same refusal as a JSON:API error document.
+func refuse(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	if !isV1(r) {
+		reply.Refuse(w, status, code, message)
+		return
+	}
+	w.Header().Set("Content-Type", jsonAPI)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]any{
+		"jsonapi": map[string]string{"version": "1.1"},
+		"errors": []map[string]string{{
+			"status": strconv.Itoa(status), "code": code, "title": http.StatusText(status), "detail": message,
+		}},
+	})
+}
+
+func (s *Server) listTokens(w http.ResponseWriter, r *http.Request) {
+	reply.JSON(w, http.StatusOK, map[string]any{"tokens": s.tokens.List()})
+}
+
+func (s *Server) issueToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name      string `json:"name"`
+		Scope     string `json:"scope"`
+		ExpiresIn string `json:"expiresIn"`
+		IdleFor   string `json:"idleFor"`
+	}
+	if !reply.Decode(w, r, &req) {
+		return
+	}
+	tok, text, err := s.tokens.Issue(req.Name, req.Scope, req.ExpiresIn, req.IdleFor)
+	switch {
+	case errors.Is(err, errTokenInvalid):
+		reply.Refuse(w, http.StatusBadRequest, reply.CodeInvalid, sentence(err, errTokenInvalid))
+		return
+	case errors.Is(err, errTokenTaken):
+		reply.Refuse(w, http.StatusConflict, reply.CodeConflict, sentence(err, errTokenTaken))
+		return
+	case err != nil:
+		s.log.Error("a token could not be issued", "error", err.Error())
+		reply.Refuse(w, http.StatusInternalServerError, reply.CodeInternal, "The token could not be written down, so none was issued.")
+		return
+	}
+	s.log.Info("token issued", "name", tok.Name, "scope", tok.Scope, "ip", s.clientIP(r))
+	reply.JSON(w, http.StatusCreated, map[string]any{"token": tok, "secret": text})
+}
+
+func (s *Server) revokeToken(w http.ResponseWriter, r *http.Request) {
+	tok, found, err := s.tokens.Revoke(r.PathValue("id"))
+	switch {
+	case !found:
+		reply.Refuse(w, http.StatusNotFound, reply.CodeNotFound, "There is no such token; it may have been revoked already.")
+		return
+	case err != nil:
+		s.log.Error("a token could not be revoked", "error", err.Error())
+		reply.Refuse(w, http.StatusInternalServerError, reply.CodeInternal, "The token could not be struck off, so it still works.")
+		return
+	}
+	s.log.Info("token revoked", "name", tok.Name, "scope", tok.Scope, "ip", s.clientIP(r))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// sentence is an error's text without its kind, capitalized, as a refusal says it.
+func sentence(err, kind error) string {
+	msg := strings.TrimPrefix(err.Error(), kind.Error()+": ")
+	if msg == "" {
+		return msg
+	}
+	return strings.ToUpper(msg[:1]) + msg[1:] + "."
+}
+
 const signInPath = "/login"
 
 // gate decides who gets which document, before the bundle loads: a signed-out visitor handed the
@@ -191,10 +322,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.guard(s.mux).ServeHTTP(sv, r)
 }
 
-// served is what a request's line in the log says: the status it was answered with.
+// served is what a request's line in the log says: the status it was answered with, and the
+// token it came with, by name.
 type served struct {
 	http.ResponseWriter
 	status int
+	token  string
 }
 
 func (sv *served) WriteHeader(code int) {
@@ -229,8 +362,11 @@ func (s *Server) logRequest(r *http.Request, sv *served, start time.Time) {
 	case r.Method != http.MethodGet:
 		level = slog.LevelInfo
 	}
-	s.log.Log(r.Context(), level, "request answered",
-		"method", r.Method, "path", path, "status", status, "took", time.Since(start).Round(100*time.Microsecond))
+	attrs := []any{"method", r.Method, "path", path, "status", status, "took", time.Since(start).Round(100 * time.Microsecond)}
+	if sv.token != "" {
+		attrs = append(attrs, "token", sv.token)
+	}
+	s.log.Log(r.Context(), level, "request answered", attrs...)
 }
 
 // guard is the CSRF defense: SameSite on the cookie, Sec-Fetch-Site, and a declared content
@@ -244,12 +380,18 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		}
 		// A browser sets this; a script cannot forge it.
 		if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
-			reply.Refuse(w, http.StatusForbidden, reply.CodeForbidden, "That request came from somewhere else.")
+			refuse(w, r, http.StatusForbidden, reply.CodeForbidden, "That request came from somewhere else.")
 			return
 		}
-		// Only when a body is present: a write with nothing to say carries none.
-		if r.ContentLength != 0 && !reply.IsJSON(r.Header.Get("Content-Type")) {
-			reply.Refuse(w, http.StatusUnsupportedMediaType, reply.CodeUnsupportedMediaType, "Send application/json.")
+		// Only when a body is present: a write with nothing to say carries none. Under /api/v1,
+		// JSON:API's, which a form can no more send than JSON; the engine holds it to the letter.
+		ct := r.Header.Get("Content-Type")
+		if r.ContentLength != 0 && !reply.IsJSON(ct) && !(isV1(r) && mediaIs(ct, jsonAPI)) {
+			want := "application/json"
+			if isV1(r) {
+				want = jsonAPI
+			}
+			refuse(w, r, http.StatusUnsupportedMediaType, reply.CodeUnsupportedMediaType, "Send "+want+".")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -289,4 +431,12 @@ func (s *Server) clientIP(r *http.Request) string {
 		}
 	}
 	return client.String()
+}
+
+// mediaIs is whether a Content-Type names this media type, whatever its parameters.
+func mediaIs(ct, mt string) bool {
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = ct[:i]
+	}
+	return strings.TrimSpace(ct) == mt
 }

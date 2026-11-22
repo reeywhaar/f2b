@@ -137,12 +137,13 @@ are queries on `fail2ban.sqlite3`, opened read-only. Its purge age is ninety day
 That is fail2ban's: its `unbanip` deletes them. A ban that runs out on its own stays in the
 history.
 
-## Every wrong password is one line, for fail2ban
+## Every wrong password, and every refused token, is one line, for fail2ban
 
-The web bans nobody itself. Each refused password is logged as
+The web bans nobody itself. Each refused password, and each refused API token, is logged as
 
 ```
 {"time":"…","level":"WARN","msg":"password refused","ip":"203.0.113.7"}
+{"time":"…","level":"WARN","msg":"token refused","ip":"203.0.113.7"}
 ```
 
 and a jail on the web's own log does the rest:
@@ -150,7 +151,7 @@ and a jail on the web's own log does the rest:
 ```ini
 # filter.d/f2b.local
 [Definition]
-failregex = ^\{.*"msg":"password refused".*"ip":"<ADDR>"
+failregex = ^\{.*"msg":"(?:password|token) refused".*"ip":"<ADDR>"
 ignoreregex =
 ```
 
@@ -168,8 +169,9 @@ bantime   = 1d
 ```
 
 The line names the address and nothing else: a password typed into the wrong field is common
-enough that logging what was typed would log passwords. Sign-ins are also limited to five
-quick attempts an address, and thirty across all of them.
+enough that logging what was typed would log passwords, and a token pasted wrong is most of a
+token. Sign-ins are also limited to five quick attempts an address, and thirty across all of them;
+refused tokens spend the same five.
 
 ## The caller is the first X-Forwarded-For hop that is not a trusted proxy
 
@@ -190,6 +192,25 @@ A cookie says when it ends, thirty days on and moved on by a visit each day, and
 over that and the password, under a key in `/data/session.key`. So there is no session table and
 no database of the web's own. Changing `ADMIN_PASSWORD` signs every browser out; so does Sign
 out everywhere, which replaces the key.
+
+## An API token is a second way in, to /api/v1 only, and the engine decides what it may do
+
+A script or an agent gets a token from Config rather than the password. The web issues it, shows
+it once, and keeps a digest of it in `/data/tokens.json`, which only the web writes; the file is
+no use to whoever reads it. A token is `f2b_`, an id that finds it, and a secret checked against
+the digest.
+
+Each token reads, or reads and writes, and ends after a lifetime and after a time unused, each a
+day, a week, 30, 90 or 180 days, a year, or never. Its last use is kept to the minute and written
+at most once a minute, so an agent polling every second is not a write every second. A token
+works only on `/api/v1`, and never on the routes that make and end tokens: a leaked one cannot
+make itself another.
+
+The web says which scope a request has in `F2B-Scope`, set over whatever the request carried: the
+token's, or `write` for a signed-in browser. Each `/api/v1` route in the engine says whether it
+writes, and refuses a read scope if it does, so what a scope may do is decided where the routes
+are, and the web still knows nothing of fail2ban. Trying a filter and checking a file are POSTs
+that change nothing, and a read token may.
 
 ## Moving from linuxserver/fail2ban
 

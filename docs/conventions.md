@@ -20,6 +20,8 @@ One name per thing, in identifiers, the API, the docs and the interface.
 | composed | the directory fail2ban runs with, built from stock and the files | `Composer`, `Live` |
 | ban | an address kept out by a jail, now or in the history | `Ban`, `bans` |
 | version | a hash of a file's content, which a save is made against | `Version`, `VersionOf` |
+| token | an API token: what a script or an agent sends to /api/v1 instead of the password | `Token`, `Tokens` |
+| scope | what a token may do there: read, or read and write | `ScopeRead`, `ScopeWrite` |
 
 **"User" is not a word here.** There is one password, and whoever has it is signed in.
 

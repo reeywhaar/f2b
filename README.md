@@ -16,6 +16,9 @@ the browser; a change is tried on fail2ban before it is saved, and fail2ban relo
   database holds, for ninety days unless fail2ban.local says otherwise.
 - **fail2ban's log**, following along.
 - **One password**, from the environment. Every wrong one is a line for fail2ban to read.
+- **API tokens for scripts and agents**, issued in Config, each reading or reading and writing,
+  each ending after a lifetime and after a time unused: for `/api/v1`, the same engine in
+  JSON:API, described by an OpenAPI document at `/api/v1/openapi.json`.
 
 ## Two containers
 
@@ -100,6 +103,7 @@ linuxserver/fail2ban.
   fail2ban.log        fail2ban's log, as the engine captured it
   engine.sock         the engine's API, which the web reaches
   session.key         what signs the sign-in cookie
+  tokens.json         the API tokens issued, as digests
 ```
 
 The files in `fail2ban/` are plain files. Anything that edits them works; the engine reads them

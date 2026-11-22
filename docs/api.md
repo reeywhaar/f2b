@@ -120,6 +120,18 @@ missed}}`, `summary` null when fail2ban-regex did not get as far as counting.
 
 ## /api/v1, for scripts and agents
 
+Tokens are the web's, issued to a signed-in browser and never to a token:
+
+`GET /api/auth/tokens` — `{tokens: [{id, name, scope, created, lastUsed, expires, idle, ends,
+expired}]}`, newest first. `ends` is when it stops working at the latest, unused from now; `0`
+for never.
+
+`POST /api/auth/tokens` `{name, scope, expiresIn, idleFor}` — `scope` is `read` or `write`; the
+two lifetimes are each `1d`, `1w`, `30d`, `90d`, `180d`, `1y` or `never`. `201 {token, secret}`:
+`secret` is the whole token, in this answer and nowhere else.
+
+`DELETE /api/auth/tokens/{id}` — `204`. It stops working at once.
+
 The same engine in JSON:API 1.1, at `/api/v1`, described route by route in
 [`openapi.json`](../internal/engine/openapi.json), which the web also serves, unauthenticated, at
 `/api/v1/openapi.json`. The interface keeps the plain API above.
