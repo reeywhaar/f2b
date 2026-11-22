@@ -116,6 +116,8 @@ export type Token = {
   /** When it stops working at the latest, unused from now. */
   ends: number;
   expired: boolean;
+  /** An agent access link's: listed while it works, and gone once it does not. */
+  temporary: boolean;
 };
 
 /** How long a token lasts, and how long unused: the web's keys for them. */

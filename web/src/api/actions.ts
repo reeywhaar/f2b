@@ -49,6 +49,16 @@ export const postAuthTokens = (body: {
     body,
   });
 
+/**
+ * Makes an agent access link: a page for an agent, showing a token until linkEnds, five minutes
+ * on. The token works for thirty.
+ */
+export const postAuthAgentAccess = (body: { scope: Scope }) =>
+  request<{ url: string; token: Token; linkEnds: number }>(
+    "/api/auth/agent-access",
+    { method: "POST", body },
+  );
+
 export const deleteAuthTokensById = (id: string) =>
   request<void>(`/api/auth/tokens/${encodeURIComponent(id)}`, {
     method: "DELETE",

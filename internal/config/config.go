@@ -24,9 +24,9 @@ const (
 	// PasswordEnv is the one sign-in there is.
 	PasswordEnv = "ADMIN_PASSWORD"
 
-	// PublicURLEnv is the address a browser opens. Only its scheme is read: an http one sends
-	// the session cookie without Secure. Unset, https is assumed, which is what a proxy in front
-	// serves.
+	// PublicURLEnv is the address a browser opens. Its scheme says whether the session cookie is
+	// Secure: an http one sends it without. An agent access link is made with it. Unset, https is
+	// assumed, which is what a proxy in front serves, and a link takes the address it was asked at.
 	PublicURLEnv = "F2B_PUBLIC_URL"
 
 	// TrustedProxiesEnv is whose X-Forwarded-For is believed: addresses and ranges, "private"
@@ -55,6 +55,8 @@ type Web struct {
 	Password string
 	// Secure is whether the cookie is sent only over https.
 	Secure bool
+	// PublicURL is F2B_PUBLIC_URL without a slash at its end, or "" when it is unset.
+	PublicURL string
 	// TrustedProxies are the peers whose X-Forwarded-For says who the caller is.
 	TrustedProxies Proxies
 	// Label names this server in the interface, or is "".
@@ -102,6 +104,7 @@ func LoadWeb() (*Web, error) {
 			return nil, fmt.Errorf("%s: %q should be an http:// or https:// address, e.g. https://f2b.example.com", PublicURLEnv, raw)
 		}
 		w.Secure = u.Scheme == "https"
+		w.PublicURL = strings.TrimRight(raw, "/")
 	}
 	w.Label = strings.TrimSpace(os.Getenv(LabelEnv))
 	if n := len([]rune(w.Label)); n > labelMax {

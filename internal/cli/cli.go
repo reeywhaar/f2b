@@ -204,6 +204,11 @@ func runWeb() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// An agent's token lapsed while the web was down goes now; the rest within the minute.
+	if _, err := tokens.Sweep(); err != nil {
+		log.Warn("lapsed agent tokens could not be struck off", "error", err.Error())
+	}
+	go tokens.SweepEvery(ctx, time.Minute, log)
 	errc := make(chan error, 1)
 	go func() {
 		log.Info("f2b web started", "addr", app.ListenAddr, "version", app.Version, "engine", cfg.Layout.Socket)

@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   deleteAuthTokensById,
   getAuthTokens,
+  postAuthAgentAccess,
   postAuthTokens,
 } from "@app/api/actions";
 import { qk } from "@app/api/keys";
@@ -14,8 +15,9 @@ import { useConfirm } from "@app/components/Confirm";
 import { CopyButton } from "@app/components/CopyButton";
 import { Dialog } from "@app/components/Dialog";
 import { DummyRows } from "@app/components/Dummy";
-import { Field, Fields } from "@app/components/Field";
+import { Field, Fields, Group } from "@app/components/Field";
 import { Panel } from "@app/components/Panel";
+import { Segmented } from "@app/components/Segmented";
 import { Select } from "@app/components/Select";
 import { TextField } from "@app/components/TextField";
 import { ago, dateTime, span, until } from "@app/format";
@@ -58,6 +60,7 @@ function lasts(t: Token): string {
 export function Tokens() {
   const tokens = useQuery({ queryKey: qk.tokens, queryFn: getAuthTokens });
   const [creating, setCreating] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [made, setMade] = useState<{ token: Token; secret: string } | null>(
     null,
   );
@@ -82,7 +85,10 @@ export function Tokens() {
             . One that reads inspects everything and changes nothing; one that
             reads and writes can also ban, edit and restart.
           </p>
-          <Button onClick={() => setCreating(true)}>New token…</Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setInviting(true)}>Agent access…</Button>
+            <Button onClick={() => setCreating(true)}>New token…</Button>
+          </div>
         </div>
         {list.length ? (
           <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-bg">
@@ -103,6 +109,7 @@ export function Tokens() {
         }}
       />
       <SecretDialog made={made} onClose={() => setMade(null)} />
+      <AgentAccessDialog open={inviting} onClose={() => setInviting(false)} />
     </Panel>
   );
 }
@@ -139,6 +146,11 @@ function TokenRow({ token: t }: { token: Token }) {
           <span className="rounded bg-fill px-1.5 py-0.5 text-xs">
             {t.scope === "write" ? "reads and writes" : "reads"}
           </span>
+          {t.temporary ? (
+            <span className="rounded bg-fill px-1.5 py-0.5 text-xs text-muted">
+              agent access
+            </span>
+          ) : null}
           {t.expired ? (
             <span className="text-xs text-warn">expired</span>
           ) : null}
@@ -151,8 +163,12 @@ function TokenRow({ token: t }: { token: Token }) {
           ) : (
             "never used"
           )}
-          {" · lasts "}
-          {lasts(t)}
+          {t.temporary ? null : (
+            <>
+              {" · lasts "}
+              {lasts(t)}
+            </>
+          )}
           {!t.expired && t.ends ? (
             <span title={dateTime(t.ends)}>, ends {until(t.ends)}</span>
           ) : null}
@@ -232,22 +248,17 @@ function NewTokenDialog({
               maxLength={60}
             />
           </Field>
-          <Field
+          <Group
             label="Can"
             hint="Read takes every GET, the filter tester and the config check. Read and write also bans, unbans, saves files and restarts fail2ban."
           >
-            <Select
-              className="w-full"
+            <Segmented
+              label="Can"
               value={scope}
-              onChange={(e) => setScope(e.target.value as Scope)}
-            >
-              {scopes.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
+              options={scopes}
+              onChange={setScope}
+            />
+          </Group>
           <Field
             label="Expires after"
             hint="It stops working this long after it is issued, however it is used."
@@ -329,6 +340,126 @@ function SecretDialog({
             <CopyButton text={example} label="the example" />
           </div>
         </div>
+      ) : null}
+    </Dialog>
+  );
+}
+
+/** A time of day, here: when a link or a token stops. */
+const clock = (at: number) =>
+  new Date(at * 1000).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/**
+ * Letting an agent in: a link to paste into one, opening a page that tells it what this f2b is,
+ * how to use its API, and the token to do it with. All it asks is whether the agent reads, or
+ * reads and writes. The page shows the token for five minutes and the token works for thirty,
+ * and the dialog says both, so whoever pastes it knows how long they have.
+ */
+function AgentAccessDialog({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const client = useQueryClient();
+  const [scope, setScope] = useState<Scope>("read");
+  const make = useMutation({
+    mutationFn: () => postAuthAgentAccess({ scope }),
+    onSuccess: () => client.invalidateQueries({ queryKey: qk.tokens }),
+  });
+  // Every opening asks afresh: what a link shows cannot be shown again.
+  useEffect(() => {
+    if (!open) return;
+    setScope("read");
+    make.reset();
+    // make is a new object each render, and its reset is not.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const link = make.data;
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Agent access"
+      footer={
+        link ? (
+          <Button variant="solid" onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button
+              variant="solid"
+              type="submit"
+              form="agent-access"
+              disabled={make.isPending}
+            >
+              {make.isPending ? "Making…" : "Make link"}
+            </Button>
+          </>
+        )
+      }
+    >
+      {link ? (
+        <div className="flex flex-col gap-3 text-sm">
+          <p>
+            Paste it into an agent. It opens a page saying what this f2b is and
+            how to use its API, with a token that{" "}
+            {link.token.scope === "write" ? "reads and writes" : "reads"}.
+          </p>
+          <div className="flex items-start gap-2 rounded-md bg-(--color-code-bg) p-2">
+            {/* A link, so the page can be looked at before it is handed over. */}
+            <a
+              href={link.url}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-0 flex-1 font-mono text-xs break-all underline-offset-2 hover:underline"
+            >
+              {link.url}
+            </a>
+            <CopyButton text={link.url} label="the link" />
+          </div>
+          <p className="text-xs text-muted">
+            The link shows the token until {clock(link.linkEnds)}, for five
+            minutes. The token works until {clock(link.token.expires)}, and
+            until then is listed here, to revoke; then it is gone.
+          </p>
+        </div>
+      ) : (
+        <form
+          id="agent-access"
+          className="flex flex-col gap-3"
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            make.mutate();
+          }}
+        >
+          <p className="text-sm">
+            A link to paste into an agent: a page saying what this f2b is and
+            how to use its API, with a token. The page shows the token for five
+            minutes; the token works for thirty, and is then gone.
+          </p>
+          <Group
+            label="Can"
+            hint="Read takes every GET, the filter tester and the config check. Read and write also bans, unbans, saves files and restarts fail2ban."
+          >
+            <Segmented
+              label="Can"
+              value={scope}
+              options={scopes}
+              onChange={setScope}
+            />
+          </Group>
+        </form>
+      )}
+      {make.isError ? (
+        <p className="text-sm text-accent">{messageOf(make.error)}</p>
       ) : null}
     </Dialog>
   );

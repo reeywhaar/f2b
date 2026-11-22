@@ -96,6 +96,9 @@ func New(cfg *config.Web, log *slog.Logger, sessions *Sessions, tokens *Tokens, 
 	s.mux.Handle("GET /api/auth/tokens", s.requireSession(s.listTokens))
 	s.mux.Handle("POST /api/auth/tokens", s.requireSession(s.issueToken))
 	s.mux.Handle("DELETE /api/auth/tokens/{id}", s.requireSession(s.revokeToken))
+	s.mux.Handle("POST /api/auth/agent-access", s.requireSession(s.agentAccess))
+	// What an agent access link opens: its code is all it asks for.
+	s.mux.HandleFunc("GET /agent-access/{code}", s.accessPage)
 	// What /api/v1 is, for whoever is about to ask for a token to use it.
 	s.mux.HandleFunc("GET /api/v1/openapi.json", s.engine.ServeHTTP)
 	s.mux.Handle("/api/v1/", s.requireCaller(s.engine.ServeHTTP))

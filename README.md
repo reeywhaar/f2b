@@ -22,6 +22,8 @@ the browser; a change is tried on fail2ban before it is saved, and fail2ban relo
 - **API tokens for scripts and agents**, issued in Config, each reading or reading and writing,
   each ending after a lifetime and after a time unused: for `/api/v1`, the same engine in
   JSON:API, described by an OpenAPI document at `/api/v1/openapi.json`.
+- **Agent access**: a link to paste into an agent, opening a brief on this f2b and its API with a
+  token. The link shows it for five minutes, and the token works for thirty and is then gone.
 
 ## Two containers
 
@@ -91,7 +93,7 @@ linuxserver/fail2ban.
 | variable | read by | |
 | --- | --- | --- |
 | `ADMIN_PASSWORD` | web | *required.* At least 8 characters. Changing it signs every browser out |
-| `F2B_PUBLIC_URL` | web | where the interface is opened; only an `http://` one matters, sending the cookie without Secure |
+| `F2B_PUBLIC_URL` | web | where the interface is opened: an `http://` one sends the cookie without Secure, and agent access links are made with it, or else with the address the browser used |
 | `F2B_TRUSTED_PROXIES` | web | whose `X-Forwarded-For` is believed; `private` by default |
 | `F2B_LABEL` | web | names this server in the header and the tab's title, for telling several apart |
 | `F2B_DATA_DIR` | both | the shared directory; `/data` by default |

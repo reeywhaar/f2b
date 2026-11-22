@@ -147,11 +147,13 @@ history.
 
 ## Every wrong password, and every refused token, is one line, for fail2ban
 
-The web bans nobody itself. Each refused password, and each refused API token, is logged as
+The web bans nobody itself. Each refused password, each refused API token, and each agent access
+link that shows nothing, is logged as
 
 ```
 {"time":"…","level":"WARN","msg":"password refused","ip":"203.0.113.7"}
 {"time":"…","level":"WARN","msg":"token refused","ip":"203.0.113.7"}
+{"time":"…","level":"WARN","msg":"link refused","ip":"203.0.113.7"}
 ```
 
 and a jail on the web's own log does the rest:
@@ -159,7 +161,7 @@ and a jail on the web's own log does the rest:
 ```ini
 # filter.d/f2b.local
 [Definition]
-failregex = ^\{.*"msg":"(?:password|token) refused".*"ip":"<ADDR>"
+failregex = ^\{.*"msg":"(?:password|token|link) refused".*"ip":"<ADDR>"
 ignoreregex =
 ```
 
@@ -179,7 +181,7 @@ bantime   = 1d
 The line names the address and nothing else: a password typed into the wrong field is common
 enough that logging what was typed would log passwords, and a token pasted wrong is most of a
 token. Sign-ins are also limited to five quick attempts an address, and thirty across all of them;
-refused tokens spend the same five.
+refused tokens and links spend the same five.
 
 ## The caller is the first X-Forwarded-For hop that is not a trusted proxy
 
@@ -219,6 +221,24 @@ token's, or `write` for a signed-in browser. Each `/api/v1` route in the engine 
 writes, and refuses a read scope if it does, so what a scope may do is decided where the routes
 are, and the web still knows nothing of fail2ban. Trying a filter and checking a file are POSTs
 that change nothing, and a read token may.
+
+## Letting an agent in is a link that shows a token for five minutes, and the token works for thirty
+
+Agent access, in Config, asks only whether the agent reads or reads and writes, and makes a link
+to paste into it: `/agent-access/…`, a page of markdown saying what this f2b is, how to use
+`/api/v1`, and the token. The link shows the token for five minutes and the token works for
+thirty, both from when the link was made: long enough to paste it and get going, short enough
+that the link in a chat's history, a proxy's access log or a link preview is dead by the time
+anybody else looks, and the token gone before it is anybody's problem. For more time, a new link.
+The token is below the page's opening lines, which are what a chat's preview of a link shows.
+
+The link is not the token. Its code names it in the web's memory and nowhere else: a restart
+drops it, which costs a new link, and no code or token text is ever on disk. The token is in
+`tokens.json` as every token is, a digest, marked temporary: listed while it works, to revoke,
+and deleted within the minute it stops, rather than kept as expired, where there would be one for
+every time somebody let an agent in.
+
+The link is made with `F2B_PUBLIC_URL`, or without it the address the browser asked at.
 
 ## Moving from linuxserver/fail2ban
 

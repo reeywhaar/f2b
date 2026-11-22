@@ -16,16 +16,19 @@ const agent: Token = {
   idle: 30 * 86400,
   ends: now + 30 * 86400,
   expired: false,
+  temporary: false,
 };
 
 const getAuthTokens = vi.fn();
 const postAuthTokens = vi.fn();
 const deleteAuthTokensById = vi.fn();
+const postAuthAgentAccess = vi.fn();
 
 vi.mock("@app/api/actions", () => ({
   getAuthTokens: () => getAuthTokens(),
   postAuthTokens: (b: unknown) => postAuthTokens(b),
   deleteAuthTokensById: (id: string) => deleteAuthTokensById(id),
+  postAuthAgentAccess: (b: unknown) => postAuthAgentAccess(b),
 }));
 
 afterEach(() => vi.clearAllMocks());
@@ -51,9 +54,7 @@ describe("API tokens", () => {
     fireEvent.change(screen.getByLabelText("Name"), {
       target: { value: " ci " },
     });
-    fireEvent.change(screen.getByLabelText("Can"), {
-      target: { value: "write" },
-    });
+    fireEvent.click(screen.getByRole("radio", { name: "Read and write" }));
     fireEvent.click(screen.getByRole("button", { name: "Issue" }));
     await waitFor(() =>
       expect(postAuthTokens).toHaveBeenCalledWith({
@@ -69,6 +70,53 @@ describe("API tokens", () => {
     await waitFor(() =>
       expect(screen.queryByText("f2b_a1b2c3d4e5f60718_secret")).toBeNull(),
     );
+  });
+
+  it("makes an agent a link, asking only what it can do", async () => {
+    getAuthTokens.mockResolvedValue({ tokens: [] });
+    postAuthAgentAccess.mockResolvedValue({
+      url: "https://f2b.example.com/agent-access/c0de",
+      token: {
+        ...agent,
+        name: "Agent access a1b2c3",
+        scope: "write",
+        temporary: true,
+        expires: now + 1800,
+      },
+      linkEnds: now + 300,
+    });
+    mount(<Tokens />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Agent access…" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Read and write" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make link" }));
+    await waitFor(() =>
+      expect(postAuthAgentAccess).toHaveBeenCalledWith({ scope: "write" }),
+    );
+    expect(
+      await screen.findByText("https://f2b.example.com/agent-access/c0de"),
+    ).toBeTruthy();
+    expect(screen.getByText(/for five\s+minutes/)).toBeTruthy();
+  });
+
+  it("marks an agent's token, and says when it ends rather than how long it lasts", async () => {
+    getAuthTokens.mockResolvedValue({
+      tokens: [
+        {
+          ...agent,
+          name: "Agent access a1b2c3",
+          temporary: true,
+          idle: 0,
+          expires: now + 1800,
+          ends: now + 1800,
+        },
+      ],
+    });
+    mount(<Tokens />);
+    expect(await screen.findByText("agent access")).toBeTruthy();
+    expect(screen.queryByText(/lasts/)).toBeNull();
+    expect(screen.getByText(/ends in/)).toBeTruthy();
   });
 
   it("asks before revoking one", async () => {
