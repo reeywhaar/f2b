@@ -193,3 +193,10 @@ export const FileIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M13.5 3.5v4h4M9 12h6M9 15.5h6" />
   </Icon>
 );
+
+export const RefreshIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+    <path d="M19.5 4.5v4h-4" />
+  </Icon>
+);

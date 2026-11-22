@@ -16,7 +16,10 @@ vi.mock("@app/api/actions", () => ({
   getLogs: () => Promise.resolve({ roots: [] }),
 }));
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 const failed = "Nov 22 10:05:01 host app[7]: login failed for 192.0.2.1";
 const fine = "Nov 22 10:05:02 host app[7]: login ok";
@@ -63,6 +66,33 @@ describe("the tester", () => {
     fireEvent.click(within(show).getByRole("button", { name: /Matched/ }));
     await waitFor(() => expect(screen.queryByText(fine)).toBeNull());
     expect(screen.getByText(failed)).toBeTruthy();
+  });
+
+  it("reads the log again, and runs again once it has run", async () => {
+    tester();
+    await screen.findByText(fine);
+    const later = "Nov 22 10:06:00 host app[7]: login failed for 192.0.2.9";
+    getLogsByPath.mockResolvedValueOnce({
+      entry: {},
+      entries: [],
+      more: false,
+      lines: [failed, fine, later],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(await screen.findByText(later)).toBeTruthy();
+    expect(getLogsByPath).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Run fail2ban-regex" }));
+    await screen.findByRole("group", { name: "Show" });
+    fireEvent.click(await screen.findByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(postRegex).toHaveBeenCalledTimes(2));
+  });
+
+  it("comes back to the log last tried with the filter", async () => {
+    localStorage.setItem("f2b:tester:app.local", "/srv/other.log");
+    tester();
+    await screen.findByText(fine);
+    expect(getLogsByPath).toHaveBeenCalledWith("/srv/other.log", 2000);
   });
 
   it("starts a failregex from a line", async () => {

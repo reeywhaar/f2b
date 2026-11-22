@@ -16,7 +16,7 @@ import type { RegexLine, Verdict } from "@app/api/types";
 import { Button } from "@app/components/Button";
 import { Field } from "@app/components/Field";
 import { Heading } from "@app/components/Heading";
-import { PlusIcon } from "@app/components/icons/Icon";
+import { PlusIcon, RefreshIcon } from "@app/components/icons/Icon";
 import { SearchField } from "@app/components/SearchField";
 import { Select } from "@app/components/Select";
 import { TextField, fieldLook } from "@app/components/TextField";
@@ -60,8 +60,14 @@ export function RegexTester({
   const jails = useQuery({ queryKey: qk.jails, queryFn: getJails });
   const bare = file.replace(/\.(local|conf)$/, "");
   const [filter, setFilter] = useState(bare);
-  // A log's path, or PASTED for lines pasted.
-  const [source, setSource] = useState("");
+  // A log's path, or PASTED for lines pasted; the one last tried with this filter, in this
+  // browser, so a reload comes back to it.
+  const remembered = `f2b:tester:${file}`;
+  const [source, setSourceNow] = useState(() => recall(remembered));
+  const setSource = (v: string) => {
+    setSourceNow(v);
+    keep(remembered, v);
+  };
   const [text, setText] = useState("");
   const [lines, setLines] = useState(2000);
   const [live, setLive] = useState(false);
@@ -117,6 +123,13 @@ export function RegexTester({
     e.preventDefault();
     tryIt();
     setLive(true);
+  };
+
+  // The log read again, for what was written to it since: by running again when its lines have
+  // been judged, which reads it afresh, and otherwise by reading its end.
+  const refresh = () => {
+    if (result) tryIt();
+    else tail.refetch();
   };
 
   const draft = (line: string) => {
@@ -249,6 +262,8 @@ export function RegexTester({
                 : ""
             }
             onDraft={draft}
+            onRefresh={picked !== PASTED ? refresh : undefined}
+            refreshing={result ? run.isPending : tail.isFetching}
           />
         ) : null}
         {result ? (
@@ -313,6 +328,8 @@ function TriedLines({
   pending,
   error,
   onDraft,
+  onRefresh,
+  refreshing,
 }: {
   rows: RegexLine[];
   /** Whether the lines have verdicts yet. */
@@ -320,6 +337,9 @@ function TriedLines({
   pending: boolean;
   error: string;
   onDraft: (line: string) => void;
+  /** Reads the log again; none for lines pasted. */
+  onRefresh?: () => void;
+  refreshing: boolean;
 }) {
   const [only, setOnly] = useState<Verdict | "all">("all");
   const [find, setFind] = useState("");
@@ -346,12 +366,14 @@ function TriedLines({
   );
   const start = Math.max(shown.length - drawn, 0);
 
-  // The newest at the bottom, in view; a run again over the same lines stays where it is read.
+  // The newest at the bottom, in view, and kept there as lines come: unless somebody scrolled up
+  // to read one, which stays where it is.
   const box = useRef<HTMLDivElement>(null);
+  const stuck = useRef(true);
   useLayoutEffect(() => {
     const el = box.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [rows.length, only, f]);
+    if (el && stuck.current) el.scrollTop = el.scrollHeight;
+  }, [rows, only, f]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -387,6 +409,16 @@ function TriedLines({
           </span>
         )}
         <span className="flex-1" />
+        {onRefresh ? (
+          <Button
+            onClick={onRefresh}
+            disabled={refreshing}
+            title="Read the log again, for what was written to it since"
+          >
+            <RefreshIcon className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Reading…" : "Refresh"}
+          </Button>
+        ) : null}
         <SearchField
           placeholder="Find in these lines"
           aria-label="Find in these lines"
@@ -397,6 +429,10 @@ function TriedLines({
       </div>
       <div
         ref={box}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+        }}
         className="scroll-thin max-h-[32rem] min-h-16 overflow-auto rounded-md border border-line bg-(--color-code-bg) py-1 font-mono text-[11px] leading-relaxed"
       >
         {error ? (
@@ -454,4 +490,22 @@ function marked(text: string, find: string): ReactNode {
   }
   parts.push(text.slice(at));
   return parts;
+}
+
+/** What this browser kept under key, or "" where it kept nothing or keeps nothing. */
+function recall(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Keeps value under key in this browser, where it keeps anything: a private window may not. */
+function keep(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Nothing kept: the next visit starts from the jail's log, as the first did.
+  }
 }
