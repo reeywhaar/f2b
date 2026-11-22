@@ -12,8 +12,11 @@ import type {
   Me,
   RegexResult,
   Result,
+  Lifetime,
+  Scope,
   Stats,
   Stock,
+  Token,
 } from "@app/api/types";
 
 /** Named mechanically from the route, so a call site and a handler find each other by grep. */
@@ -28,6 +31,26 @@ export const postAuthLogoutEverywhere = () =>
   request<void>("/api/auth/logout-everywhere", { method: "POST" });
 
 export const getAuthMe = () => request<Me>("/api/auth/me");
+
+export const getAuthTokens = () =>
+  request<{ tokens: Token[] }>("/api/auth/tokens");
+
+/** Issues a token; secret is the whole of it, in this answer and nowhere else. */
+export const postAuthTokens = (body: {
+  name: string;
+  scope: Scope;
+  expiresIn: Lifetime;
+  idleFor: Lifetime;
+}) =>
+  request<{ token: Token; secret: string }>("/api/auth/tokens", {
+    method: "POST",
+    body,
+  });
+
+export const deleteAuthTokensById = (id: string) =>
+  request<void>(`/api/auth/tokens/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 
 export const getEngine = () => request<Engine>("/api/engine");
 

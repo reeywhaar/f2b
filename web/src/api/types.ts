@@ -76,6 +76,27 @@ export type Applied = { file: File | null; also: FileRef[]; reload: Result };
 
 export type Stock = { filters: string[]; actions: string[]; other: string[] };
 
+/** What an API token may do on /api/v1. */
+export type Scope = "read" | "write";
+
+/** An API token as the web lists it: never its secret. Times are Unix seconds, 0 for never. */
+export type Token = {
+  id: string;
+  name: string;
+  scope: Scope;
+  created: number;
+  lastUsed: number;
+  expires: number;
+  /** Seconds it lasts unused. */
+  idle: number;
+  /** When it stops working at the latest, unused from now. */
+  ends: number;
+  expired: boolean;
+};
+
+/** How long a token lasts, and how long unused: the web's keys for them. */
+export type Lifetime = "1d" | "1w" | "30d" | "90d" | "180d" | "1y" | "never";
+
 export type RegexResult = {
   ok: boolean;
   output: string;

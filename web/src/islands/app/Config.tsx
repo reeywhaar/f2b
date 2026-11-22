@@ -14,6 +14,7 @@ import { Link } from "@app/islands/app/Link";
 import { NameDialog } from "@app/islands/app/NameDialog";
 import { go, paths } from "@app/islands/app/route";
 import { Session } from "@app/islands/app/Session";
+import { Tokens } from "@app/islands/app/Tokens";
 
 const lists: {
   kind: Exclude<Kind, "settings">;
@@ -120,6 +121,7 @@ export function Config() {
         </ul>
       </Panel>
       <StockList />
+      <Tokens />
       <Session />
       <NameDialog
         open={adding !== null}

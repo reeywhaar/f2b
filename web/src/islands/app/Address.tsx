@@ -1,6 +1,4 @@
-import { useEffect, useState } from "react";
-
-import { CheckIcon, CopyIcon } from "@app/components/icons/Icon";
+import { CopyButton } from "@app/components/CopyButton";
 import { Link } from "@app/islands/app/Link";
 
 /**
@@ -18,13 +16,6 @@ export function Address({
   replace?: boolean;
   className?: string;
 }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(t);
-  }, [copied]);
-
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
       <Link
@@ -34,24 +25,7 @@ export function Address({
       >
         {ip}
       </Link>
-      {/* The clipboard is a browser's only over https and on localhost; elsewhere a button
-          that cannot work is left out. */}
-      {navigator.clipboard ? (
-        <button
-          type="button"
-          aria-label={copied ? `Copied ${ip}` : `Copy ${ip}`}
-          title={copied ? "Copied" : "Copy"}
-          onClick={() =>
-            navigator.clipboard.writeText(ip).then(
-              () => setCopied(true),
-              () => {},
-            )
-          }
-          className="flex shrink-0 rounded p-0.5 text-faint hover:bg-control-hover hover:text-fg"
-        >
-          {copied ? <CheckIcon className="text-brand" /> : <CopyIcon />}
-        </button>
-      ) : null}
+      <CopyButton text={ip} label={ip} />
     </span>
   );
 }
