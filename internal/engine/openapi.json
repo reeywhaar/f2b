@@ -1,0 +1,2486 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "f2b",
+    "version": "1",
+    "description": "fail2ban's jails, bans, history, configuration and log, as JSON:API 1.1.\n\nAuthenticate with an API token from the interface's Config: `Authorization: Bearer f2b_\u2026`. A read token can take every route whose `x-f2b-scope` is `read`; a write token, every route. Send and accept `application/vnd.api+json`. Writes to a file name the version they were made against in `If-Match`, the file's `ETag`."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "token": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "engine"
+    },
+    {
+      "name": "jails"
+    },
+    {
+      "name": "bans"
+    },
+    {
+      "name": "history"
+    },
+    {
+      "name": "files"
+    },
+    {
+      "name": "tools"
+    },
+    {
+      "name": "stock"
+    },
+    {
+      "name": "log"
+    },
+    {
+      "name": "meta"
+    }
+  ],
+  "paths": {
+    "/api/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenAPI",
+        "summary": "This document",
+        "tags": [
+          "meta"
+        ],
+        "security": [],
+        "x-f2b-scope": "none",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1, as JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/engine": {
+      "get": {
+        "operationId": "getEngine",
+        "summary": "The engine and how fail2ban is doing",
+        "tags": [
+          "engine"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The engine.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Engine"
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/v1/engine/restart": {
+      "post": {
+        "operationId": "restartEngine",
+        "summary": "Restart fail2ban with the configuration on disk",
+        "tags": [
+          "engine"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "202": {
+            "description": "Restarting; GET /api/v1/engine says when it runs again.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/v1/jails": {
+      "get": {
+        "operationId": "listJails",
+        "summary": "Every running jail and its counts",
+        "tags": [
+          "jails"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The jails.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Jail"
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Fail2banNotAnswering"
+          }
+        }
+      }
+    },
+    "/api/v1/jails/{name}": {
+      "get": {
+        "operationId": "getJail",
+        "summary": "One running jail",
+        "tags": [
+          "jails"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The jail.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Jail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Fail2banNotAnswering"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/bans": {
+      "get": {
+        "operationId": "listBans",
+        "summary": "Every ban in force, newest first",
+        "tags": [
+          "bans"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The bans.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Ban"
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Fail2banNotAnswering"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FilterJail"
+          },
+          {
+            "$ref": "#/components/parameters/FilterIp"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "banAddress",
+        "summary": "Ban an address or a range in a jail, by hand",
+        "tags": [
+          "bans"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "201": {
+            "description": "Banned.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Ban"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Fail2banNotAnswering"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "bans"
+                      },
+                      "attributes": {
+                        "type": "object",
+                        "properties": {
+                          "ip": {
+                            "type": "string",
+                            "description": "An address or a range: 203.0.113.7, 203.0.113.0/24."
+                          }
+                        },
+                        "required": [
+                          "ip"
+                        ]
+                      },
+                      "relationships": {
+                        "type": "object",
+                        "properties": {
+                          "jail": {
+                            "type": "object",
+                            "properties": {
+                              "data": {
+                                "$ref": "#/components/schemas/JailIdentifier"
+                              }
+                            },
+                            "required": [
+                              "data"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "jail"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "attributes",
+                      "relationships"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jails/{jail}/bans/{ip}": {
+      "delete": {
+        "operationId": "unbanAddress",
+        "summary": "Lift a ban in a jail",
+        "tags": [
+          "bans"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "204": {
+            "description": "Lifted. fail2ban also deletes the address's earlier bans in that jail from its database."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "$ref": "#/components/responses/Fail2banNotAnswering"
+          }
+        },
+        "parameters": [
+          {
+            "name": "jail",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ip",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "A range's slash escaped, as 203.0.113.0%2F24."
+          }
+        ]
+      }
+    },
+    "/api/v1/history": {
+      "get": {
+        "operationId": "listHistory",
+        "summary": "Bans in fail2ban's database, newest first",
+        "tags": [
+          "history"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "A page of them; links.next is the page after.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HistoryBan"
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FilterJail"
+          },
+          {
+            "$ref": "#/components/parameters/FilterIp"
+          },
+          {
+            "$ref": "#/components/parameters/PageBefore"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/stats": {
+      "get": {
+        "operationId": "getStats",
+        "summary": "Counts over the days up to today",
+        "tags": [
+          "history"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The counts.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Stats"
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter[days]",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 366,
+              "default": 30
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files": {
+      "get": {
+        "operationId": "listFiles",
+        "summary": "The edited files, without their content",
+        "tags": [
+          "files"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The files.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/File"
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "filter[kind]",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "jails",
+                "filters",
+                "actions",
+                "settings"
+              ]
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createFile",
+        "summary": "Create a file",
+        "tags": [
+          "files"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "201": {
+            "description": "Checked by fail2ban, written, and reloaded.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Applied"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The file's version, for If-Match."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "description": "Refused with config_rejected, writing nothing, when fail2ban would not start with it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "files"
+                      },
+                      "attributes": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "jails",
+                              "filters",
+                              "actions",
+                              "settings"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "content"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "attributes"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/files/{kind}/{name}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Kind"
+        },
+        {
+          "$ref": "#/components/parameters/Name"
+        }
+      ],
+      "get": {
+        "operationId": "getFile",
+        "summary": "One file, with its content",
+        "tags": [
+          "files"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The file.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The file's version, for If-Match."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "saveFile",
+        "summary": "Save a file's whole content",
+        "tags": [
+          "files"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Checked by fail2ban, written, and reloaded.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Applied"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The file's version, for If-Match."
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "files"
+                      },
+                      "id": {
+                        "type": "string",
+                        "description": "kind/name, as in the address."
+                      },
+                      "attributes": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "content"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id",
+                      "attributes"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteFile",
+        "summary": "Delete a file",
+        "tags": [
+          "files"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Deleted, if fail2ban would still start without it, and reloaded.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Applied"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ]
+      }
+    },
+    "/api/v1/files/{kind}/{name}/rename": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Kind"
+        },
+        {
+          "$ref": "#/components/parameters/Name"
+        }
+      ],
+      "post": {
+        "operationId": "renameFile",
+        "summary": "Rename a file",
+        "tags": [
+          "files"
+        ],
+        "x-f2b-scope": "write",
+        "responses": {
+          "200": {
+            "description": "Renamed; with references, the jails that named it name the new one.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/File"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/Applied"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "description": "Settings files keep their names.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "meta": {
+                    "type": "object",
+                    "properties": {
+                      "to": {
+                        "type": "string",
+                        "description": "The new name."
+                      },
+                      "references": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Change every jail file that names it, as one change."
+                      }
+                    },
+                    "required": [
+                      "to"
+                    ]
+                  }
+                },
+                "required": [
+                  "meta"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config-checks": {
+      "post": {
+        "operationId": "checkConfig",
+        "summary": "Whether fail2ban would start with a file as given",
+        "tags": [
+          "tools"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "What fail2ban said; nothing is saved.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ConfigCheck"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "config-checks"
+                      },
+                      "attributes": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "jails",
+                              "filters",
+                              "actions",
+                              "settings"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "content": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The file as it would be; null to try without it."
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "attributes"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/regex-tests": {
+      "post": {
+        "operationId": "testRegex",
+        "summary": "Run fail2ban-regex: a filter over a log's end or pasted lines",
+        "tags": [
+          "tools"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "What fail2ban-regex said; nothing is saved.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RegexTest"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.api+json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "regex-tests"
+                      },
+                      "attributes": {
+                        "type": "object",
+                        "properties": {
+                          "filter": {
+                            "type": "string",
+                            "description": "As a jail names it: sshd, or sshd[mode=aggressive]."
+                          },
+                          "file": {
+                            "type": "string",
+                            "description": "With content: the filter file's name."
+                          },
+                          "content": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "The filter file as it would be, unsaved."
+                          },
+                          "log": {
+                            "type": "string",
+                            "description": "A log the engine can read, absolute; or text."
+                          },
+                          "text": {
+                            "type": "string",
+                            "description": "Lines to try; or log."
+                          },
+                          "lines": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 20000,
+                            "default": 2000,
+                            "description": "How many lines from the log's end."
+                          }
+                        },
+                        "required": [
+                          "filter"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "attributes"
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stock": {
+      "get": {
+        "operationId": "listStock",
+        "summary": "fail2ban's own filters, actions and top-level files",
+        "tags": [
+          "stock"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "Their paths.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StockFile"
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/api/v1/stock/{path}": {
+      "get": {
+        "operationId": "getStockFile",
+        "summary": "One of fail2ban's own files",
+        "tags": [
+          "stock"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The file.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StockFile"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "filter.d/sshd.conf, action.d/iptables.conf, or jail.conf; its slash not escaped."
+          }
+        ]
+      }
+    },
+    "/api/v1/log": {
+      "get": {
+        "operationId": "getLog",
+        "summary": "fail2ban's log, the latest lines or those after a cursor",
+        "tags": [
+          "log"
+        ],
+        "x-f2b-scope": "read",
+        "responses": {
+          "200": {
+            "description": "The lines; links.next follows on from the last.",
+            "content": {
+              "application/vnd.api+json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jsonapi": {
+                      "$ref": "#/components/schemas/JsonApi"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LogLine"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "epoch": {
+                          "type": "string",
+                          "description": "Names this run of the engine."
+                        },
+                        "last": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "links": {
+                      "$ref": "#/components/schemas/Links"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "parameters": [
+          {
+            "name": "page[after]",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "The last seq already read."
+          },
+          {
+            "name": "page[epoch]",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "The epoch the cursor came from; another run's starts over."
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000,
+              "default": 1000
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "token": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API token: f2b_ followed by its id and secret."
+      }
+    },
+    "schemas": {
+      "JsonApi": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "const": "1.1"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "Links": {
+        "type": "object",
+        "properties": {
+          "self": {
+            "type": "string",
+            "description": "This document or resource."
+          },
+          "next": {
+            "type": "string",
+            "description": "The page after this one, where there is one."
+          }
+        }
+      },
+      "JailIdentifier": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "jails"
+          },
+          "id": {
+            "type": "string",
+            "description": "The jail's name."
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ]
+      },
+      "FileIdentifier": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "files"
+          },
+          "id": {
+            "type": "string",
+            "description": "kind/name, as jails/sshd.local."
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The HTTP status, as a string."
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid",
+              "unauthenticated",
+              "not_found",
+              "conflict",
+              "forbidden",
+              "unsupported_media_type",
+              "not_acceptable",
+              "body_too_large",
+              "rate_limited",
+              "config_rejected",
+              "fail2ban",
+              "precondition_failed",
+              "precondition_required",
+              "engine_unreachable",
+              "internal"
+            ],
+            "description": "The contract; title and detail are for a person and may change."
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string",
+            "description": "A sentence saying what to do about it."
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "output": {
+                "type": "string",
+                "description": "What fail2ban said, for config_rejected."
+              }
+            }
+          }
+        },
+        "required": [
+          "status",
+          "code",
+          "title"
+        ]
+      },
+      "ErrorDocument": {
+        "type": "object",
+        "properties": {
+          "jsonapi": {
+            "$ref": "#/components/schemas/JsonApi"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "required": [
+          "errors"
+        ]
+      },
+      "Fail2banState": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "starting",
+              "running",
+              "stopped"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "since": {
+            "type": "integer",
+            "description": "When it entered this state, in Unix seconds."
+          },
+          "restarts": {
+            "type": "integer",
+            "description": "The times it stopped without being asked to."
+          },
+          "lastExit": {
+            "type": "string",
+            "description": "How it last stopped, or empty."
+          }
+        }
+      },
+      "Engine": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "engine"
+          },
+          "id": {
+            "type": "string",
+            "description": "Always engine."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string",
+                "description": "The engine's own version."
+              },
+              "fail2ban": {
+                "$ref": "#/components/schemas/Fail2banState"
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "Jail": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "jails"
+          },
+          "id": {
+            "type": "string",
+            "description": "The jail's name."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "failedNow": {
+                "type": "integer",
+                "description": "Addresses with failures counted now, under maxRetry."
+              },
+              "failedTotal": {
+                "type": "integer",
+                "description": "Failures matched since fail2ban started."
+              },
+              "bannedNow": {
+                "type": "integer"
+              },
+              "bannedTotal": {
+                "type": "integer",
+                "description": "Bans since fail2ban started."
+              },
+              "logs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "findTime": {
+                "type": "integer",
+                "description": "Seconds."
+              },
+              "banTime": {
+                "type": "integer",
+                "description": "Seconds; -1 for good."
+              },
+              "maxRetry": {
+                "type": "integer"
+              },
+              "filter": {
+                "type": "string",
+                "description": "The filter it names, without options."
+              }
+            }
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/FileIdentifier"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "data"
+                ],
+                "description": "The edited file that defines it; null for a jail only fail2ban's own files define."
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "Ban": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "bans"
+          },
+          "id": {
+            "type": "string",
+            "description": "jail/ip, as sshd/203.0.113.7."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "ip": {
+                "type": "string",
+                "description": "An address or a range."
+              },
+              "at": {
+                "type": "integer",
+                "description": "When it began, Unix seconds; 0 where the database does not have it yet."
+              },
+              "duration": {
+                "type": "integer",
+                "description": "Seconds; -1 for good."
+              },
+              "until": {
+                "type": "integer",
+                "description": "When it ends; 0 for never or not known."
+              },
+              "count": {
+                "type": "integer",
+                "description": "Which ban of this address in this jail it is."
+              },
+              "failures": {
+                "type": "integer"
+              },
+              "matches": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The log lines that did it."
+              }
+            }
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "jail": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/JailIdentifier"
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ],
+        "description": "A ban in force."
+      },
+      "HistoryBan": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "history-bans"
+          },
+          "id": {
+            "type": "string",
+            "description": "The database's id for it."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "ip": {
+                "type": "string"
+              },
+              "at": {
+                "type": "integer"
+              },
+              "duration": {
+                "type": "integer"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "failures": {
+                "type": "integer"
+              },
+              "matches": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "relationships": {
+            "type": "object",
+            "properties": {
+              "jail": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "$ref": "#/components/schemas/JailIdentifier"
+                  }
+                },
+                "required": [
+                  "data"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ],
+        "description": "A ban in fail2ban's database, in force or not."
+      },
+      "Stats": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "stats"
+          },
+          "id": {
+            "type": "string",
+            "description": "Always stats."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "days": {
+                "type": "integer"
+              },
+              "from": {
+                "type": "integer",
+                "description": "The first day counted, Unix seconds, UTC."
+              },
+              "jails": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "perDay": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "day": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD, UTC."
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "byJail": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              },
+              "bans": {
+                "type": "integer"
+              },
+              "ips": {
+                "type": "integer",
+                "description": "Distinct addresses."
+              },
+              "repeat": {
+                "type": "integer",
+                "description": "Addresses banned more than once."
+              },
+              "lastDay": {
+                "type": "integer",
+                "description": "Bans in the last 24 hours."
+              },
+              "top": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "ip": {
+                      "type": "string"
+                    },
+                    "bans": {
+                      "type": "integer"
+                    },
+                    "last": {
+                      "type": "integer"
+                    },
+                    "jails": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "FileAttributes": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "jails",
+              "filters",
+              "actions",
+              "settings"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Ends in .local or .conf."
+          },
+          "size": {
+            "type": "integer"
+          },
+          "modified": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "string",
+            "description": "A digest of the content; send it back as If-Match."
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Its bracketed sections but DEFAULT and INCLUDES: in a jail file, its jails."
+            }
+          },
+          "content": {
+            "type": "string",
+            "description": "The whole file; only where one file is asked for."
+          }
+        }
+      },
+      "File": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "files"
+          },
+          "id": {
+            "type": "string",
+            "description": "kind/name, as jails/sshd.local."
+          },
+          "attributes": {
+            "$ref": "#/components/schemas/FileAttributes"
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "Applied": {
+        "type": "object",
+        "properties": {
+          "also": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Other files the change wrote: the jails a rename changed."
+          },
+          "reload": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "output": {
+                "type": "string",
+                "description": "What fail2ban said; says so when the engine restarted it."
+              }
+            }
+          }
+        },
+        "description": "What a write did besides: a failed reload leaves the file saved."
+      },
+      "ConfigCheck": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "config-checks"
+          },
+          "id": {
+            "type": "string",
+            "description": "A digest of what was tried."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "output": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "RegexTest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "regex-tests"
+          },
+          "id": {
+            "type": "string",
+            "description": "A digest of what was tried."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "filter": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "output": {
+                "type": "string",
+                "description": "fail2ban-regex's own output."
+              },
+              "summary": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "lines": {
+                        "type": "integer"
+                      },
+                      "ignored": {
+                        "type": "integer"
+                      },
+                      "matched": {
+                        "type": "integer"
+                      },
+                      "missed": {
+                        "type": "integer"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "StockFile": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "stock-files"
+          },
+          "id": {
+            "type": "string",
+            "description": "Its path."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "filter.d/sshd.conf, or jail.conf."
+              },
+              "group": {
+                "type": "string",
+                "enum": [
+                  "filters",
+                  "actions",
+                  "other"
+                ]
+              },
+              "content": {
+                "type": "string",
+                "description": "Only where one file is asked for."
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/Links"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      },
+      "LogLine": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "log-lines"
+          },
+          "id": {
+            "type": "string",
+            "description": "epoch-seq."
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "attributes"
+        ]
+      }
+    },
+    "parameters": {
+      "FilterJail": {
+        "name": "filter[jail]",
+        "in": "query",
+        "schema": {
+          "type": "string"
+        },
+        "description": "Only this jail's."
+      },
+      "FilterIp": {
+        "name": "filter[ip]",
+        "in": "query",
+        "schema": {
+          "type": "string"
+        },
+        "description": "Only this address's."
+      },
+      "PageBefore": {
+        "name": "page[before]",
+        "in": "query",
+        "schema": {
+          "type": "integer"
+        },
+        "description": "links.next carries it."
+      },
+      "Kind": {
+        "name": "kind",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "enum": [
+            "jails",
+            "filters",
+            "actions",
+            "settings"
+          ]
+        }
+      },
+      "Name": {
+        "name": "name",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "The file's name, as sshd.local."
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "The version the change was made against: the file's ETag, or attributes.version."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "invalid, or body_too_large: the request is not one this takes.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "Unauthenticated": {
+        "description": "No token, or one that is unknown, revoked or expired.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "A read token on a route that changes something.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No such jail, file or route.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "A file that is already there, or a resource type or id that is not this endpoint's.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "PreconditionFailed": {
+        "description": "The file changed since the version in If-Match: read it again.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "PreconditionRequired": {
+        "description": "If-Match is missing.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "The body is not application/vnd.api+json.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "Unprocessable": {
+        "description": "config_rejected, with fail2ban's words in meta.output; or fail2ban refused a command.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Too many refused tokens from this address.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      },
+      "Fail2banNotAnswering": {
+        "description": "fail2ban is starting, or stopped.",
+        "content": {
+          "application/vnd.api+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorDocument"
+            }
+          }
+        }
+      }
+    }
+  }
+}

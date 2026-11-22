@@ -25,6 +25,15 @@ const StockDir = "/etc/fail2ban"
 // Inside the container, so each start begins from nothing.
 const RunDir = "/run/f2b"
 
+// ScopeHeader is what the web says a request to /api/v1 may do, having checked who sent it:
+// ScopeRead or ScopeWrite. The web always sets it, over whatever came in; a request without it
+// came to the socket from somebody else, whom the socket trusts as it trusts the web.
+const (
+	ScopeHeader = "F2B-Scope"
+	ScopeRead   = "read"
+	ScopeWrite  = "write"
+)
+
 // Layout is where everything lives in the data directory, which both containers mount.
 type Layout struct {
 	Data string

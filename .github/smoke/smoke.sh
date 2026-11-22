@@ -3,7 +3,7 @@
 # the container's own network namespace: a filter and a jail saved through the API, failures
 # written to a log, the ban that follows in fail2ban and in iptables, an unban, a jail's action
 # changed for one of another name, a configuration fail2ban refuses, the filter tester, a restart
-# that puts the ban back, and a rename.
+# that puts the ban back, a rename, and /api/v1 as a read and a write token reach it.
 #
 #   docker build --target engine -t f2b-engine:smoke . && IMAGE=f2b-engine:smoke .github/smoke/smoke.sh
 set -eu
@@ -34,9 +34,15 @@ class Conn(http.client.HTTPConnection):
         self.sock.settimeout(150)
         self.sock.connect("/data/engine.sock")
 method, path = sys.argv[1], sys.argv[2]
-body = sys.argv[3] if len(sys.argv) > 3 else None
+body = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
+headers = {}
+if body:
+    headers["Content-Type"] = "application/vnd.api+json" if path.startswith("/api/v1/") else "application/json"
+# The scope the web would pass on for a token, when one is given.
+if len(sys.argv) > 4:
+    headers["F2B-Scope"] = sys.argv[4]
 c = Conn("engine")
-c.request(method, path, body=body, headers={"Content-Type": "application/json"} if body else {})
+c.request(method, path, body=body, headers=headers)
 r = c.getresponse()
 print(r.status, r.read().decode())
 PY
@@ -124,6 +130,18 @@ case "$out" in 200*'"also":[{"kind":"jails","name":"app.local"}]'*'"reload":{"ok
 docker exec "$name" grep -q '^filter = app-auth$' /data/fail2ban/jail.d/app.local || fail "the jail names the old filter"
 docker exec "$name" test ! -e /data/fail2ban/filter.d/app.local || fail "the old name is still there"
 wait_for '"name":"app"' api GET /api/jails
+
+echo "==> /api/v1 answers in JSON:API, and a read scope cannot ban"
+out=$(api GET /api/v1/jails "" read)
+case "$out" in 200*'"jsonapi":{"version":"1.1"}'*'"type":"jails","id":"app"'*) ;; *) fail "v1 jails: $out" ;; esac
+ban='{"data":{"type":"bans","attributes":{"ip":"203.0.113.11"},"relationships":{"jail":{"data":{"type":"jails","id":"app"}}}}}'
+out=$(api POST /api/v1/bans "$ban" read)
+case "$out" in 403*'"code":"forbidden"'*) ;; *) fail "v1 ban with a read scope: $out" ;; esac
+out=$(api POST /api/v1/bans "$ban" write)
+case "$out" in 201*'"id":"app/203.0.113.11"'*) ;; *) fail "v1 ban: $out" ;; esac
+wait_for '203.0.113.11' docker exec "$name" iptables -S f2b-app
+out=$(api DELETE /api/v1/jails/app/bans/203.0.113.11 "" write)
+case "$out" in 204*) ;; *) fail "v1 unban: $out" ;; esac
 
 echo "==> healthy"
 docker exec "$name" f2b healthcheck engine || fail "healthcheck"

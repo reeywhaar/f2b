@@ -117,3 +117,35 @@ one such as `jail.conf`.
 not. `log` is a file the engine can read, of which the last `lines` are tried (2,000 by default,
 20,000 at most), or `text` the lines themselves. `{ok, output, summary: {lines, ignored, matched,
 missed}}`, `summary` null when fail2ban-regex did not get as far as counting.
+
+## /api/v1, for scripts and agents
+
+The same engine in JSON:API 1.1, at `/api/v1`, described route by route in
+[`openapi.json`](../internal/engine/openapi.json), which the web also serves, unauthenticated, at
+`/api/v1/openapi.json`. The interface keeps the plain API above.
+
+Through the web, a request carries an API token, `Authorization: Bearer f2b_…`, or the browser's
+session. Each route says in `x-f2b-scope` which token takes it: a read token every `read` route,
+a write token every route. Trying a filter (`POST /api/v1/regex-tests`) and checking a file
+(`POST /api/v1/config-checks`) change nothing, so they are `read`. The web says which scope a
+request has in `F2B-Scope`; one to the socket without it is the socket's own caller, trusted as
+the web is.
+
+What JSON:API asks, and what this adds:
+
+- `application/vnd.api+json` both ways: another body is `415`, an Accept naming it only with
+  parameters other than `ext` and `profile` is `406`.
+- A document is `{jsonapi, data, meta, links}`; a refusal is `{jsonapi, errors: [{status, code,
+  title, detail, meta}]}`, with the codes of the refusals above and `meta.output` for
+  `config_rejected`.
+- Query parameters are `filter[…]` and `page[…]`: `filter[jail]`, `filter[ip]`, `filter[kind]`,
+  `filter[days]`, `page[before]`, `page[after]`, `page[epoch]`, `page[size]`. `links.next` is the
+  page after, where there is one.
+- A ban in force is `bans` with the id `jail/ip`, and is lifted at
+  `DELETE /api/v1/jails/{jail}/bans/{ip}`, a range's slash escaped as `%2F`. A ban in the database
+  is `history-bans`, with the database's id.
+- A file is `files` with the id `kind/name`. Its `ETag` is its version: `PATCH` and `DELETE`, and
+  a rename, send it back in `If-Match`. Without it, `428`; against an older one, `412`. A write's
+  `meta` is what the plain API's `{also, reload}` is.
+- A rename, `POST /api/v1/files/{kind}/{name}/rename`, is an action rather than a resource, and
+  takes `{meta: {to, references}}`.

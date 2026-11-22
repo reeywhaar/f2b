@@ -145,12 +145,15 @@ func TestSectionsNameTheJailsInAFile(t *testing.T) {
 	}
 }
 
-// stubDaemon is a running fail2ban that remembers being restarted, with the actions it is given.
+// stubDaemon is a running fail2ban that remembers being restarted and what it banned and lifted,
+// with the actions it is given.
 type stubDaemon struct {
 	mu       sync.Mutex
 	state    string
 	restarts int
 	actions  map[string][]string
+	banned   []string
+	unbanned []string
 }
 
 func (d *stubDaemon) State() DaemonState {
@@ -162,9 +165,28 @@ func (d *stubDaemon) Restart() { d.mu.Lock(); d.restarts++; d.mu.Unlock() }
 func (d *stubDaemon) Jails(context.Context) ([]Jail, error) {
 	return []Jail{{Name: "sshd"}, {Name: "app"}}, nil
 }
-func (d *stubDaemon) Banned(context.Context) (map[string][]string, error) { return nil, nil }
-func (d *stubDaemon) Ban(context.Context, string, string) error           { return nil }
-func (d *stubDaemon) Unban(context.Context, string, string) error         { return nil }
+func (d *stubDaemon) Banned(context.Context) (map[string][]string, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := map[string][]string{}
+	for _, b := range d.banned {
+		jail, ip, _ := strings.Cut(b, " ")
+		out[jail] = append(out[jail], ip)
+	}
+	return out, nil
+}
+func (d *stubDaemon) Ban(_ context.Context, jail, ip string) error {
+	d.mu.Lock()
+	d.banned = append(d.banned, jail+" "+ip)
+	d.mu.Unlock()
+	return nil
+}
+func (d *stubDaemon) Unban(_ context.Context, jail, ip string) error {
+	d.mu.Lock()
+	d.unbanned = append(d.unbanned, jail+" "+ip)
+	d.mu.Unlock()
+	return nil
+}
 func (d *stubDaemon) Actions(context.Context) (map[string][]string, error) {
 	return d.actions, nil
 }

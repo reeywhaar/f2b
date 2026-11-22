@@ -47,6 +47,15 @@ var ErrNotFound = errors.New("not found")
 // ErrConflict is a file that changed since it was read.
 var ErrConflict = errors.New("conflict")
 
+// ErrStale is a change made against a version the file no longer has: a conflict to the plain
+// API, and to /api/v1 a failed If-Match.
+var ErrStale error = stale{}
+
+type stale struct{}
+
+func (stale) Error() string        { return ErrConflict.Error() }
+func (stale) Is(target error) bool { return target == ErrConflict }
+
 func invalid(format string, a ...any) error {
 	return fmt.Errorf("%w: "+format, append([]any{ErrInvalid}, a...)...)
 }

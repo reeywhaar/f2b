@@ -19,6 +19,11 @@ const (
 	CodeUnsupportedMediaType = "unsupported_media_type"
 	CodeBodyTooLarge         = "body_too_large"
 	CodeRateLimited          = "rate_limited"
+	CodeNotAcceptable        = "not_acceptable"
+	// CodePreconditionFailed is a write made against a version the file no longer has, and
+	// CodePreconditionRequired one that named no version at all.
+	CodePreconditionFailed   = "precondition_failed"
+	CodePreconditionRequired = "precondition_required"
 	// CodeRejected is fail2ban refusing a configuration; output says what it said.
 	CodeRejected = "config_rejected"
 	// CodeFail2ban is fail2ban refusing a command, or not answering one.

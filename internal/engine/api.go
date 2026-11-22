@@ -71,6 +71,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/stock/{path...}", s.stockFile)
 	m.HandleFunc("POST /api/regex", s.regex)
 	m.HandleFunc("GET /api/log", s.log)
+	s.handleV1(m)
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		reply.Refuse(w, http.StatusNotFound, reply.CodeNotFound, "There is no such endpoint. docs/api.md lists them all.")
 	})
@@ -95,17 +96,30 @@ func (s *Server) engine(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) restart(w http.ResponseWriter, r *http.Request) {
-	s.Log.Info("fail2ban restart asked for")
-	s.Lines.Note("NOTICE", "restarting fail2ban, as asked")
-	s.Daemon.Restart()
+	s.restartAsked()
 	w.WriteHeader(http.StatusAccepted)
 }
 
+func (s *Server) restartAsked() {
+	s.Log.Info("fail2ban restart asked for")
+	s.Lines.Note("NOTICE", "restarting fail2ban, as asked")
+	s.Daemon.Restart()
+}
+
 func (s *Server) jails(w http.ResponseWriter, r *http.Request) {
-	jails, err := s.Daemon.Jails(r.Context())
+	jails, err := s.jailList(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	reply.JSON(w, http.StatusOK, map[string]any{"jails": jails})
+}
+
+// jailList is every running jail, with the edited file that defines it and the filter it names.
+func (s *Server) jailList(ctx context.Context) ([]Jail, error) {
+	jails, err := s.Daemon.Jails(ctx)
+	if err != nil {
+		return nil, err
 	}
 	// The file a jail is defined in: the first that names it, among jail files and then settings.
 	files, _ := s.Files.List()
@@ -131,7 +145,7 @@ func (s *Server) jails(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	reply.JSON(w, http.StatusOK, map[string]any{"jails": jails})
+	return jails, nil
 }
 
 // CurrentBan is a ban in force: fail2ban's word that it is, with the database's of when it
@@ -143,12 +157,21 @@ type CurrentBan struct {
 }
 
 func (s *Server) bans(w http.ResponseWriter, r *http.Request) {
-	banned, err := s.Daemon.Banned(r.Context())
+	out, err := s.currentBans(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	latest, err := s.History.Latest(r.Context())
+	reply.JSON(w, http.StatusOK, map[string]any{"bans": out})
+}
+
+// currentBans is every ban in force, newest first, dated from the database where it can be.
+func (s *Server) currentBans(ctx context.Context) ([]CurrentBan, error) {
+	banned, err := s.Daemon.Banned(ctx)
+	if err != nil {
+		return nil, err
+	}
+	latest, err := s.History.Latest(ctx)
 	if err != nil {
 		s.Log.Warn("the bans in force could not be dated", "error", err.Error())
 		latest = map[history.Key]history.Ban{}
@@ -172,7 +195,7 @@ func (s *Server) bans(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].IP < out[j].IP
 	})
-	reply.JSON(w, http.StatusOK, map[string]any{"bans": out})
+	return out, nil
 }
 
 func parseAddress(raw string) (string, error) {
@@ -194,33 +217,48 @@ func (s *Server) ban(w http.ResponseWriter, r *http.Request) {
 	if !reply.Decode(w, r, &req) {
 		return
 	}
-	ip, err := parseAddress(req.IP)
-	if err == nil && req.Jail == "" {
-		err = invalid("a ban is in a jail; name one")
-	}
-	if err == nil {
-		err = s.Daemon.Ban(r.Context(), req.Jail, ip)
-	}
-	if err != nil {
+	if _, err := s.banByHand(r.Context(), req.Jail, req.IP); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.Log.Info("banned by hand", "jail", req.Jail, "ip", ip)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) unban(w http.ResponseWriter, r *http.Request) {
-	ip, err := parseAddress(r.PathValue("ip"))
-	jail := r.URL.Query().Get("jail")
+// banByHand bans an address or a range in a jail, and returns it as fail2ban was given it.
+func (s *Server) banByHand(ctx context.Context, jail, raw string) (string, error) {
+	ip, err := parseAddress(raw)
+	if err == nil && jail == "" {
+		err = invalid("a ban is in a jail; name one")
+	}
 	if err == nil {
-		err = s.Daemon.Unban(r.Context(), jail, ip)
+		err = s.Daemon.Ban(ctx, jail, ip)
 	}
 	if err != nil {
+		return "", err
+	}
+	s.Log.Info("banned by hand", "jail", jail, "ip", ip)
+	return ip, nil
+}
+
+func (s *Server) unban(w http.ResponseWriter, r *http.Request) {
+	if err := s.unbanByHand(r.Context(), r.URL.Query().Get("jail"), r.PathValue("ip")); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.Log.Info("unbanned by hand", "jail", jail, "ip", ip)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// unbanByHand lifts a ban in one jail, or in every jail when jail is "".
+func (s *Server) unbanByHand(ctx context.Context, jail, raw string) error {
+	ip, err := parseAddress(raw)
+	if err == nil {
+		err = s.Daemon.Unban(ctx, jail, ip)
+	}
+	if err != nil {
+		return err
+	}
+	s.Log.Info("unbanned by hand", "jail", jail, "ip", ip)
+	return nil
 }
 
 func (s *Server) history(w http.ResponseWriter, r *http.Request) {
@@ -396,42 +434,50 @@ func (s *Server) rename(w http.ResponseWriter, r *http.Request) {
 	if !reply.Decode(w, r, &req) {
 		return
 	}
+	out, err := s.renameFile(r.Context(), k, name, req.To, req.Version, req.References)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	reply.JSON(w, http.StatusOK, out)
+}
+
+// renameFile moves a file made from version to a new name, and with references, every jail
+// file that names it too.
+func (s *Server) renameFile(ctx context.Context, k Kind, name, to, version string, references bool) (Applied, error) {
+	var err error
 	switch {
 	case k == Settings:
 		err = invalid("settings files are read by their names, and keep them")
-	case req.To == name:
+	case to == name:
 		err = invalid("that is the name it has")
 	default:
-		err = CheckName(k, req.To)
+		err = CheckName(k, to)
 	}
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return Applied{}, err
 	}
 	_, content, err := s.Files.Read(k, name)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return Applied{}, err
 	}
 	plan := []planned{
-		{Change{Kind: k, Name: req.To, Content: &content}, ""},
-		{Change{Kind: k, Name: name}, req.Version},
+		{Change{Kind: k, Name: to, Content: &content}, ""},
+		{Change{Kind: k, Name: name}, version},
 	}
-	if req.References {
-		refs, err := s.referencesTo(k, name, req.To)
+	if references {
+		refs, err := s.referencesTo(k, name, to)
 		if err != nil {
-			s.fail(w, r, err)
-			return
+			return Applied{}, err
 		}
 		plan = append(plan, refs...)
 	}
-	out, err := s.applyAll(r.Context(), plan)
+	out, err := s.applyAll(ctx, plan)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return Applied{}, err
 	}
-	s.Log.Info("file renamed", "kind", k, "from", name, "to", req.To, "references", len(out.Also))
-	reply.JSON(w, http.StatusOK, out)
+	s.Log.Info("file renamed", "kind", k, "from", name, "to", to, "references", len(out.Also))
+	return out, nil
 }
 
 // rejected is fail2ban refusing a configuration, in its own words.
@@ -470,7 +516,7 @@ func (s *Server) applyAll(ctx context.Context, plan []planned) (Applied, error) 
 		case p.Version == "" && current != "":
 			return Applied{}, fmt.Errorf("%w: there is already a %s %s", ErrConflict, singular(p.Kind), p.Name)
 		case p.Version != current:
-			return Applied{}, fmt.Errorf("%w: that file changed since it was opened; open %s again to see how", ErrConflict, p.Name)
+			return Applied{}, fmt.Errorf("%w: that file changed since it was opened; open %s again to see how", ErrStale, p.Name)
 		}
 		changes[i] = p.Change
 	}
@@ -578,25 +624,33 @@ func (s *Server) check(w http.ResponseWriter, r *http.Request) {
 	if !reply.Decode(w, r, &req) {
 		return
 	}
-	k, err := ParseKind(req.Kind)
-	if err == nil {
-		err = CheckName(k, req.Name)
-	}
+	res, err := s.checkChange(r.Context(), req.Kind, req.Name, req.Content)
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	reply.JSON(w, http.StatusOK, res)
+}
+
+// checkChange is whether fail2ban would start with a file as given, or without it for nil,
+// changing nothing.
+func (s *Server) checkChange(ctx context.Context, kind, name string, content *string) (Result, error) {
+	k, err := ParseKind(kind)
+	if err == nil {
+		err = CheckName(k, name)
+	}
+	if err != nil {
+		return Result{}, err
 	}
 	dir, err := os.MkdirTemp(filepath.Dir(s.Scratch), "check-")
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return Result{}, err
 	}
 	defer os.RemoveAll(dir)
-	if err := s.Composer.Compose(dir, Change{Kind: k, Name: req.Name, Content: req.Content}); err != nil {
-		s.fail(w, r, err)
-		return
+	if err := s.Composer.Compose(dir, Change{Kind: k, Name: name, Content: content}); err != nil {
+		return Result{}, err
 	}
-	reply.JSON(w, http.StatusOK, s.Tools.Check(r.Context(), dir))
+	return s.Tools.Check(ctx, dir), nil
 }
 
 func (s *Server) stockList(w http.ResponseWriter, r *http.Request) {
@@ -636,30 +690,47 @@ type RegexSummary struct {
 
 var summaryLine = regexp.MustCompile(`Lines: (\d+) lines, (\d+) ignored, (\d+) matched, (\d+) missed`)
 
+// RegexRequest is a filter to try and the lines to try it on.
+type RegexRequest struct {
+	// Filter is a filter's name, as a jail names it: "sshd", or "sshd[mode=aggressive]".
+	Filter string `json:"filter"`
+	// Content is the filter file as it is in the editor, unsaved, when it is one.
+	File    string  `json:"file"`
+	Content *string `json:"content"`
+	// Log is a file to read the end of, or Text the lines themselves.
+	Log   string `json:"log"`
+	Text  string `json:"text"`
+	Lines int    `json:"lines"`
+}
+
+// RegexResult is what fail2ban-regex said, and its count when it got as far as counting.
+type RegexResult struct {
+	OK      bool          `json:"ok"`
+	Output  string        `json:"output"`
+	Summary *RegexSummary `json:"summary"`
+}
+
 func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		// Filter is a filter's name, as a jail names it: "sshd", or "sshd[mode=aggressive]".
-		Filter string `json:"filter"`
-		// Content is the filter file as it is in the editor, unsaved, when it is one.
-		File    string  `json:"file"`
-		Content *string `json:"content"`
-		// Log is a file to read the end of, or Text the lines themselves.
-		Log   string `json:"log"`
-		Text  string `json:"text"`
-		Lines int    `json:"lines"`
-	}
+	var req RegexRequest
 	if !reply.Decode(w, r, &req) {
 		return
 	}
-	if !filterArg.MatchString(req.Filter) {
-		s.fail(w, r, invalid("%q is not a filter's name, which is letters, digits, dots, dashes and underscores, and options in brackets", req.Filter))
+	res, err := s.runRegex(r.Context(), req)
+	if err != nil {
+		s.fail(w, r, err)
 		return
+	}
+	reply.JSON(w, http.StatusOK, res)
+}
+
+func (s *Server) runRegex(ctx context.Context, req RegexRequest) (RegexResult, error) {
+	if !filterArg.MatchString(req.Filter) {
+		return RegexResult{}, invalid("%q is not a filter's name, which is letters, digits, dots, dashes and underscores, and options in brackets", req.Filter)
 	}
 	var changes []Change
 	if req.Content != nil {
 		if err := CheckName(Filters, req.File); err != nil {
-			s.fail(w, r, err)
-			return
+			return RegexResult{}, err
 		}
 		changes = append(changes, Change{Kind: Filters, Name: req.File, Content: req.Content})
 	}
@@ -671,13 +742,11 @@ func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
 
 	dir, err := os.MkdirTemp(filepath.Dir(s.Scratch), "regex-")
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return RegexResult{}, err
 	}
 	defer os.RemoveAll(dir)
 	if err := s.Composer.Compose(filepath.Join(dir, "etc"), changes...); err != nil {
-		s.fail(w, r, err)
-		return
+		return RegexResult{}, err
 	}
 	sample := filepath.Join(dir, "sample.log")
 	switch {
@@ -691,16 +760,15 @@ func (s *Server) regex(w http.ResponseWriter, r *http.Request) {
 		err = invalid("name a log file, or paste lines to try")
 	}
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return RegexResult{}, err
 	}
-	res := s.Tools.Regex(r.Context(), filepath.Join(dir, "etc"), sample, req.Filter)
-	out := map[string]any{"ok": res.OK, "output": res.Output, "summary": nil}
+	res := s.Tools.Regex(ctx, filepath.Join(dir, "etc"), sample, req.Filter)
+	out := RegexResult{OK: res.OK, Output: res.Output}
 	if m := summaryLine.FindStringSubmatch(res.Output); m != nil {
 		n := func(i int) int64 { v, _ := strconv.ParseInt(m[i], 10, 64); return v }
-		out["summary"] = RegexSummary{Lines: n(1), Ignored: n(2), Matched: n(3), Missed: n(4)}
+		out.Summary = &RegexSummary{Lines: n(1), Ignored: n(2), Matched: n(3), Missed: n(4)}
 	}
-	reply.JSON(w, http.StatusOK, out)
+	return out, nil
 }
 
 // pasted is lines as fail2ban-regex will count them: it reads a file as it tails one, and a last
