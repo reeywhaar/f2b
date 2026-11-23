@@ -63,8 +63,10 @@ describe("opening a file", () => {
     const view = mount(
       <FileEditor key="first" kind="filters" name="app.local" fresh={false} />,
     );
-    const first = await screen.findByLabelText("app.local, editable");
-    expect((first as HTMLTextAreaElement).value).toContain("old");
+    const first = await screen.findByLabelText<HTMLTextAreaElement>(
+      "app.local, editable",
+    );
+    expect(first.value).toContain("old");
 
     // Changed elsewhere, then gone to again: the same client, a new editor.
     getFile.mockResolvedValue({
@@ -76,8 +78,7 @@ describe("opening a file", () => {
     );
     await waitFor(() =>
       expect(
-        (screen.getByLabelText("app.local, editable") as HTMLTextAreaElement)
-          .value,
+        screen.getByLabelText<HTMLTextAreaElement>("app.local, editable").value,
       ).toContain("new"),
     );
     expect(getFile).toHaveBeenCalledTimes(2);
@@ -124,8 +125,7 @@ describe("saving a file", () => {
       await screen.findByText("ERROR: No failure-regex is present"),
     ).toBeTruthy();
     expect(
-      (screen.getByLabelText("app.local, editable") as HTMLTextAreaElement)
-        .value,
+      screen.getByLabelText<HTMLTextAreaElement>("app.local, editable").value,
     ).toBe("broken");
   });
 
@@ -152,9 +152,9 @@ describe("saving a file", () => {
       reload: { ok: true, output: "OK" },
     });
     mount(<FileEditor kind="jails" name="web.local" fresh />);
-    const editor = (await screen.findByLabelText(
+    const editor = await screen.findByLabelText<HTMLTextAreaElement>(
       "web.local, editable",
-    )) as HTMLTextAreaElement;
+    );
     expect(editor.value).toContain(
       "[web]\nenabled   = true\nfilter    = web\n",
     );
@@ -217,9 +217,9 @@ describe("saving a file", () => {
 
     view.unmount();
     mount(<FileEditor kind="filters" name="app-2.local" fresh />);
-    const copy = (await screen.findByLabelText(
+    const copy = await screen.findByLabelText<HTMLTextAreaElement>(
       "app-2.local, editable",
-    )) as HTMLTextAreaElement;
+    );
     expect(copy.value).toBe("[Definition]\nfailregex = <ADDR>\n");
   });
 });

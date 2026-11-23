@@ -127,9 +127,9 @@ describe("the tester", () => {
 
   it("asks for the filter saved before a jail names it", async () => {
     tester(true);
-    const button = await screen.findByRole("button", {
+    const button = await screen.findByRole<HTMLButtonElement>("button", {
       name: "New jail for this filter…",
     });
-    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(button.disabled).toBe(true);
   });
 });
