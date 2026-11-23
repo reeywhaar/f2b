@@ -54,6 +54,36 @@ const file = {
 
 afterEach(() => vi.clearAllMocks());
 
+describe("opening a file", () => {
+  it("reads it afresh when gone to again, rather than showing what was cached", async () => {
+    getFile.mockResolvedValue({
+      file,
+      content: "[Definition]\nfailregex = old\n",
+    });
+    const view = mount(
+      <FileEditor key="first" kind="filters" name="app.local" fresh={false} />,
+    );
+    const first = await screen.findByLabelText("app.local, editable");
+    expect((first as HTMLTextAreaElement).value).toContain("old");
+
+    // Changed elsewhere, then gone to again: the same client, a new editor.
+    getFile.mockResolvedValue({
+      file: { ...file, version: "v2" },
+      content: "[Definition]\nfailregex = new\n",
+    });
+    view.rerender(
+      <FileEditor key="again" kind="filters" name="app.local" fresh={false} />,
+    );
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("app.local, editable") as HTMLTextAreaElement)
+          .value,
+      ).toContain("new"),
+    );
+    expect(getFile).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("saving a file", () => {
   it("sends what was typed against the version it was opened at", async () => {
     getFile.mockResolvedValue({ file, content: "[Definition]\n" });

@@ -68,7 +68,11 @@ export function FileEditor({
     queryKey: qk.file(kind, name),
     queryFn: () => getFile(kind, name),
     enabled: !fresh,
-    // What is in the editor is the user's until they ask for the file again.
+    // Read afresh every time the editor is gone to: since it was last open the file may have
+    // been changed from another browser, a shell or an API token, and what was cached then is not
+    // what is on disk now. Not again while it is open: what is in the editor is the user's until
+    // they ask for the file again.
+    refetchOnMount: "always",
     refetchOnWindowFocus: false,
     staleTime: Infinity,
   });
@@ -94,11 +98,21 @@ export function FileEditor({
       const content = seeded(kind, name) ?? templateFor(kind, name, stock.data);
       setBase({ content: "", version: "" });
       setDraft(content);
-    } else if (file.data) {
+    } else if (file.data && file.isFetchedAfterMount) {
+      // From the read this opening made, never from what an earlier one left in the cache.
       setBase({ content: file.data.content, version: file.data.file.version });
       setDraft(file.data.content);
     }
-  }, [base, fresh, file.data, stock.isPending, stock.data, kind, name]);
+  }, [
+    base,
+    fresh,
+    file.data,
+    file.isFetchedAfterMount,
+    stock.isPending,
+    stock.data,
+    kind,
+    name,
+  ]);
 
   const dirty = base !== null && (fresh || draft !== base.content);
   const dirtyRef = useRef(dirty);
